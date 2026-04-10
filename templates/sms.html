@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <h2>SMS / Message Search{% if case %} — {{ case.name }}{% endif %}</h2>
+
+    <form method="GET" action="/sms" style="display:flex; gap:1rem; margin-bottom:1rem;">
+        <input name="q" value="{{ query }}" placeholder="Search messages..." style="flex:1;">
+        <input name="page" type="hidden" value="1">
+        <button type="submit" class="btn">Search</button>
+        {% if query %}<a href="/sms" class="btn btn-secondary">Clear</a>{% endif %}
+    </form>
+
+    {% if results %}
+    <div style="display:flex; justify-content:space-between; align-items:center;
+                margin-bottom:0.8rem; flex-wrap:wrap; gap:0.5rem;">
+        <p style="color:#8b949e; font-size:0.85rem;">
+            Showing {{ start + 1 }}–{{ end }} of {{ total }} result(s)
+            {% if query %}for "{{ query }}"{% endif %}
+        </p>
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+            <label style="color:#8b949e; font-size:0.8rem;">Scale:</label>
+            <select id="scaleSelect" style="font-size:0.8rem; padding:0.2rem 0.4rem;">
+                <option value="0.75rem">Compact</option>
+                <option value="0.85rem" selected>Normal</option>
+                <option value="1rem">Large</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="scroll-top-wrapper" id="topScroll">
+        <div class="scroll-top-inner" id="topScrollInner"></div>
+    </div>
+    <div class="table-wrap" id="mainTable">
+        <table id="dataTable">
+            <thead>
+                <tr>
+                    <th style="min-width:120px;">Artefact</th>
+                    {% for col in results[0].record.keys() %}
+                    <th style="min-width:140px;">{{ col }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+            {% for item in results %}
+                <tr>
+                    <td><span class="badge">{{ item.artefact }}</span></td>
+                    {% for val in item.record.values() %}
+                    <td style="max-width:300px; white-space:pre-wrap; word-break:break-word;">{{ val }}</td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if total_pages > 1 %}
+    <div style="display:flex; justify-content:center; gap:0.4rem; margin-top:1.5rem; flex-wrap:wrap;">
+        {% if page > 1 %}
+        <a href="?q={{ query }}&page={{ page - 1 }}" class="btn btn-secondary" style="padding:0.3rem 0.7rem;">‹</a>
+        {% endif %}
+        {% for p in range(1, total_pages + 1) %}
+            {% if p == page %}
+            <span style="padding:0.3rem 0.7rem; background:#238636; color:#fff;
+                         border-radius:6px; font-size:0.85rem;">{{ p }}</span>
+            {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+            <a href="?q={{ query }}&page={{ p }}" class="btn btn-secondary"
+               style="padding:0.3rem 0.7rem;">{{ p }}</a>
+            {% elif p == page - 3 or p == page + 3 %}
+            <span style="color:#8b949e; padding:0.3rem 0.4rem;">…</span>
+            {% endif %}
+        {% endfor %}
+        {% if page < total_pages %}
+        <a href="?q={{ query }}&page={{ page + 1 }}" class="btn btn-secondary" style="padding:0.3rem 0.7rem;">›</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% elif query %}
+    <p style="color:#8b949e;">No results found for "{{ query }}".</p>
+    {% else %}
+    <p style="color:#8b949e;">Enter a search term to search through SMS and MMS artefacts.</p>
+    {% endif %}
+</div>
+
+<script>
+const scaleSelect = document.getElementById('scaleSelect');
+const dataTable   = document.getElementById('dataTable');
+const topScroll   = document.getElementById('topScroll');
+const mainTable   = document.getElementById('mainTable');
+const topInner    = document.getElementById('topScrollInner');
+
+function syncWidth() {
+    if (topInner && mainTable) {
+        topInner.style.width = mainTable.scrollWidth + 'px';
+    }
+}
+
+if (scaleSelect && dataTable) {
+    scaleSelect.addEventListener('change', function () {
+        dataTable.style.fontSize = this.value;
+        requestAnimationFrame(() => requestAnimationFrame(syncWidth));
+    });
+}
+
+if (topScroll && mainTable) {
+    window.addEventListener('load', syncWidth);
+    window.addEventListener('resize', syncWidth);
+    setTimeout(syncWidth, 200);
+    topScroll.addEventListener('scroll', () => { mainTable.scrollLeft = topScroll.scrollLeft; });
+    mainTable.addEventListener('scroll', () => { topScroll.scrollLeft = mainTable.scrollLeft; });
+}
+</script>
+{% endblock %}

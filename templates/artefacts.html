@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <h2>Parsed Artefacts</h2>
+    {% if artefacts %}
+    <table>
+        <thead><tr><th>Artefact</th><th>Records</th><th></th></tr></thead>
+        <tbody>
+        {% for name, content in artefacts.items() %}
+        <tr>
+            <td>{{ name }}</td>
+            <td><span class="badge">{{ content.count if content.count is defined else '—' }}</span></td>
+            <td><a href="/artefacts/{{ name }}" style="color:#58a6ff;">View →</a></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color:#8b949e;">No artefacts loaded. Run ALEAPP from the dashboard first.</p>
+    {% endif %}
+</div>
+{% endblock %}

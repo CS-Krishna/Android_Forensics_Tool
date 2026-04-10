@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Android Forensics Tool</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0d1117; color: #c9d1d9; }
+        nav { background: #161b22; padding: 1rem 2rem; border-bottom: 1px solid #30363d;
+              display: flex; gap: 2rem; align-items: center; }
+        nav h1 { color: #58a6ff; font-size: 1.1rem; font-weight: 700; margin-right: auto; }
+        nav a { color: #8b949e; text-decoration: none; font-size: 0.9rem; }
+        nav a:hover { color: #58a6ff; }
+        .container { max-width: 1200px; margin: 2rem auto; padding: 0 2rem; }
+        .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+                padding: 1.5rem; margin-bottom: 1.5rem; }
+        .card h2 { color: #58a6ff; margin-bottom: 1rem; font-size: 1rem; }
+        .btn { background: #238636; color: #fff; border: none; padding: 0.5rem 1.2rem;
+               border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+        .btn:hover { background: #2ea043; }
+        .btn-secondary { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; }
+        .btn-secondary:hover { background: #30363d; }
+        input, select { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9;
+                        padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.9rem; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th { background: #21262d; color: #8b949e; padding: 0.6rem; text-align: left;
+             border-bottom: 1px solid #30363d; }
+        td { padding: 0.5rem 0.6rem; border-bottom: 1px solid #21262d; word-break: break-word; }
+        tr:hover td { background: #161b22; }
+        .badge { background: #238636; color: #fff; padding: 0.2rem 0.6rem;
+                 border-radius: 12px; font-size: 0.75rem; }
+        .status { padding: 0.8rem; border-radius: 6px; margin-top: 1rem; display: none; }
+        .status.success { background: #0f2a1a; border: 1px solid #238636; color: #3fb950; display: block; }
+        .status.error { background: #2a0f0f; border: 1px solid #da3633; color: #f85149; display: block; }
+	.table-wrap {
+            overflow-x: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #30363d #0d1117;
+        }
+        .table-wrap::-webkit-scrollbar { height: 8px; }
+        .table-wrap::-webkit-scrollbar-track { background: #0d1117; }
+        .table-wrap::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+        .scroll-top-wrapper {
+            overflow-x: auto; overflow-y: hidden; height: 12px; margin-bottom: 2px;
+            scrollbar-width: thin; scrollbar-color: #30363d #0d1117;
+        }
+        .scroll-top-wrapper::-webkit-scrollbar { height: 8px; }
+        .scroll-top-wrapper::-webkit-scrollbar-track { background: #0d1117; }
+        .scroll-top-wrapper::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+        .scroll-top-inner { height: 1px; }
+    </style>
+</head>
+<body>
+    <nav>
+        <h1>🔍 Android Forensics</h1>
+        <a href="/">Dashboard</a>
+        <a href="/artefacts">Artefacts</a>
+        <a href="/sms">SMS Search</a>
+        <a href="/images">Image Analysis</a>
+    </nav>
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+    <script>
+        async function postAction(url, formId, statusId) {
+            const form = document.getElementById(formId);
+            const status = document.getElementById(statusId);
+            const data = new FormData(form);
+            status.className = "status";
+            status.textContent = "Running...";
+            status.style.display = "block";
+            try {
+                const res = await fetch(url, { method: "POST", body: data });
+                const json = await res.json();
+                if (json.error) {
+                    status.className = "status error";
+                    status.textContent = "Error: " + json.error;
+                } else {
+                    status.className = "status success";
+                    status.textContent = JSON.stringify(json);
+                }
+            } catch(e) {
+                status.className = "status error";
+                status.textContent = "Request failed: " + e;
+            }
+        }
+    </script>
+</body>
+</html>

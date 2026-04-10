@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- Case Switcher -->
+<div class="card">
+    <h2>Cases</h2>
+    <div style="display:flex; flex-direction:column; gap:0.5rem; margin-bottom:1rem;">
+        {% for c in all_cases %}
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+
+            <!-- Switch button -->
+            <a href="/cases/switch/{{ c.id }}"
+               style="flex:1; padding:0.4rem 1rem; border-radius:6px; text-decoration:none;
+                      font-size:0.85rem; min-width:0;
+                      {% if case and c.id == case.id %}background:#238636; color:#fff;
+                      {% else %}background:#21262d; color:#c9d1d9; border:1px solid #30363d;{% endif %}">
+                <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    {{ c.name }}
+                </span>
+                <span style="opacity:0.5; font-size:0.75rem; margin-left:0.5rem;">
+                    {{ c.created[:10] }}
+                </span>
+            </a>
+
+            <!-- Rename button -->
+            <button onclick="toggleRename('{{ c.id }}')"
+                    style="background:#21262d; border:1px solid #30363d; color:#c9d1d9;
+                           padding:0.3rem 0.6rem; border-radius:6px; cursor:pointer; font-size:0.8rem;">
+                edit
+            </button>
+
+            <!-- Delete button -->
+            <form method="POST" action="/cases/delete/{{ c.id }}"
+                  onsubmit="return confirm('Delete case \'{{ c.name }}\'? This cannot be undone.')">
+                <button type="submit"
+                        style="background:#2a0f0f; border:1px solid #da3633; color:#f85149;
+                               padding:0.3rem 0.6rem; border-radius:6px; cursor:pointer; font-size:0.8rem;">
+                    🗑
+                </button>
+            </form>
+        </div>
+
+        <!-- Inline rename form (hidden by default) -->
+        <div id="rename_{{ c.id }}" style="display:none; padding-left:0.5rem;">
+            <form method="POST" action="/cases/rename/{{ c.id }}"
+                  style="display:flex; gap:0.5rem;"
+                  onsubmit="return validateRename('rename_input_{{ c.id }}')">
+                <input id="rename_input_{{ c.id }}" name="name"
+                       placeholder="New name..." value="{{ c.name }}"
+                       style="flex:1; font-size:0.85rem;">
+                <button type="submit" class="btn" style="font-size:0.8rem;">Save</button>
+                <button type="button" class="btn btn-secondary"
+                        style="font-size:0.8rem;"
+                        onclick="toggleRename('{{ c.id }}')">Cancel</button>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- New case form -->
+    <form id="newCaseForm" method="POST" action="/cases/new"
+          style="display:flex; gap:1rem;"
+          onsubmit="return validateCaseName()">
+        <input id="caseNameInput" name="name"
+               placeholder="New case name..." style="flex:1;" maxlength="80">
+        <button type="submit" class="btn">+ New Case</button>
+    </form>
+    <p id="caseNameError"
+       style="color:#f85149; font-size:0.8rem; margin-top:0.4rem; display:none;">
+        Case name cannot be empty.
+    </p>
+</div>
+
+<!-- Active Case Overview -->
+{% if case %}
+<div class="card">
+    <h2>Active Case — {{ case.name }}</h2>
+    <p style="color:#8b949e; font-size:0.85rem; margin-bottom:0.5rem;">
+        ID: {{ case.id }} &nbsp;|&nbsp; Created: {{ case.created[:19] | replace('T',' ') }}
+    </p>
+    <p>Artefacts parsed: <span class="badge">{{ artefact_count }}</span></p>
+    <!-- Export Report -->
+    <div style="margin-top:1rem; padding-top:1rem; border-top:1px solid #30363d;">
+        <h2 style="margin-bottom:0.8rem;">Export Report</h2>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+            <input id="investigatorField" placeholder="Investigator name (optional)"
+                   style="flex:1; min-width:180px;">
+            <a id="exportBtn" href="#"
+               onclick="triggerExport(event)"
+               style="padding:0.5rem 1.2rem; background:#1f6feb; color:#fff;
+                      border-radius:6px; text-decoration:none; font-size:0.9rem;">
+                📄 Export HTML Report
+            </a>
+        </div>
+        <p style="color:#8b949e; font-size:0.78rem; margin-top:0.4rem;">
+            Fully self-contained HTML — opens in any browser, importable into Word or Google Docs.
+        </p>
+    </div>
+</div>
+
+<!-- Ingest -->
+<div class="card">
+    <h2>Ingest Evidence</h2>
+    <p style="color:#8b949e; font-size:0.85rem; margin-bottom:1rem;">
+        Supports: .zip, .tar, .gz, or an extracted folder.
+        For FTK Imager / Oxygen Forensic — export as logical folder or zip first.
+    </p>
+    <form id="ingestForm">
+        <div style="display:flex; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap;">
+            <input id="inputPathField" name="input_path"
+                   placeholder="Path to zip / folder, or use Browse..."
+                   style="flex:1; min-width:200px;">
+            <button type="button" class="btn btn-secondary" onclick="browseFile()">
+                📁 Browse
+            </button>
+        </div>
+        <button type="button" class="btn"
+                onclick="runIngest()">
+            ▶ Ingest &amp; Parse
+        </button>
+    </form>
+    <div id="ingestStatus" class="status"></div>
+</div>
+
+<!-- Hidden file input -->
+<input type="file" id="filePicker" style="display:none;"
+       accept=".zip,.tar,.gz"
+       onchange="handleFilePick(this)">
+
+<!-- YOLOv8 -->
+<div class="card">
+    <h2>Run Image Analysis</h2>
+    <p style="color:#8b949e; font-size:0.85rem; margin-bottom:1rem;">
+        Runs weapon + general object detection on all images in the active case.
+    </p>
+    <form id="yoloForm">
+        <button type="button" class="btn"
+                onclick="postAction('/run_yolo','yoloForm','yoloStatus')">
+            ▶ Run Image Analysis
+        </button>
+    </form>
+    <div id="yoloStatus" class="status"></div>
+</div>
+
+{% else %}
+<div class="card">
+    <p style="color:#8b949e;">No active case. Create a new case above to get started.</p>
+</div>
+{% endif %}
+
+<script>
+// ── Case name validation ──────────────────────────────────
+function validateCaseName() {
+    const val = document.getElementById('caseNameInput').value.trim();
+    if (!val) {
+        document.getElementById('caseNameError').style.display = 'block';
+        return false;
+    }
+    document.getElementById('caseNameError').style.display = 'none';
+    return true;
+}
+
+function validateRename(inputId) {
+    const val = document.getElementById(inputId).value.trim();
+    return val.length > 0;
+}
+
+function toggleRename(caseId) {
+    const el = document.getElementById('rename_' + caseId);
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+// ── Browse file picker ────────────────────────────────────
+let pickedFile = null;
+
+function browseFile() {
+    document.getElementById('filePicker').click();
+}
+
+function handleFilePick(input) {
+    if (input.files.length > 0) {
+        pickedFile = input.files[0];
+        document.getElementById('inputPathField').value = pickedFile.name;
+    }
+}
+
+// ── Ingest with file upload support ──────────────────────
+async function runIngest() {
+    const status = document.getElementById('ingestStatus');
+    status.className = 'status';
+    status.textContent = 'Ingesting — this may take several minutes for large files...';
+    status.style.display = 'block';
+
+    const formData = new FormData();
+
+    if (pickedFile) {
+        formData.append('file', pickedFile);
+    } else {
+        const path = document.getElementById('inputPathField').value.trim();
+        if (!path) {
+            status.className = 'status error';
+            status.textContent = 'Please enter a path or use Browse to select a file.';
+            return;
+        }
+        formData.append('input_path', path);
+    }
+
+    try {
+        const res = await fetch('/ingest', { method: 'POST', body: formData });
+        const json = await res.json();
+        if (json.error) {
+            status.className = 'status error';
+            status.textContent = 'Error: ' + json.error;
+        } else {
+            status.className = 'status success';
+            status.textContent = '✓ Ingested successfully — '
+                + json.images_sorted + ' images sorted, '
+                + json.artefacts_parsed + ' artefacts parsed.';
+            pickedFile = null;
+        }
+    } catch(e) {
+        status.className = 'status error';
+        status.textContent = 'Request failed: ' + e;
+    }
+}
+
+// ── Generic postAction for YOLOv8 button ─────────────────
+async function postAction(url, formId, statusId) {
+    const status = document.getElementById(statusId);
+    status.className = 'status';
+    status.textContent = 'Running...';
+    status.style.display = 'block';
+    try {
+        const res = await fetch(url, { method: 'POST', body: new FormData() });
+        const json = await res.json();
+        if (json.error) {
+            status.className = 'status error';
+            status.textContent = 'Error: ' + json.error;
+        } else {
+            status.className = 'status success';
+            status.textContent = '✓ ' + JSON.stringify(json);
+        }
+    } catch(e) {
+        status.className = 'status error';
+        status.textContent = 'Request failed: ' + e;
+    }
+}
+
+function triggerExport(e) {
+    e.preventDefault();
+    const inv = document.getElementById('investigatorField').value.trim();
+    window.location.href = '/export-report?investigator=' + encodeURIComponent(inv);
+}
+</script>
+{% endblock %}

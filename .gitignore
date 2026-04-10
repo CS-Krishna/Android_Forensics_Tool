@@ -1,0 +1,32 @@
+# Virtual environment
+venv/
+
+# Case data (evidence — never push this)
+cases/
+
+# YOLO model weights
+*.pt
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Temp files
+uploads/
+outputs/
+
+# ALEAPP (it's a dependency, not your code)
+ALEAPP/
+
+# Training runs
+runs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
