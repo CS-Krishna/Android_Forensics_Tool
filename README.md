@@ -22,7 +22,51 @@ A web-based Android forensic artefact collection and analysis tool built as part
 
 - **HTML Report Export** \- fully self-contained forensic report with dark/light theme toggle
 
+## Screenshots
 
+<table align="center">
+<tr>
+<td align="center">
+<img src="assets/images/dashboard.png" width="350"/><br>
+<b>Dashboard</b><br>
+Central case management interface
+</td>
+
+<td align="center">
+<img src="assets/images/artifacts.png" width="350"/><br>
+<b>Artifacts</b><br>
+Structured forensic artefact view
+</td>
+</tr>
+
+<tr>
+<td align="center">
+<img src="assets/images/sms_search.png" width="350"/><br>
+<b>SMS Search</b><br>
+Full-text message search
+</td>
+
+<td align="center">
+<img src="assets/images/image_detection.png" width="350"/><br>
+<b>Image Detection</b><br>
+YOLOv8 object detection (COCO)
+</td>
+</tr>
+
+<tr>
+<td align="center">
+<img src="assets/images/weapons_detection.png" width="350"/><br>
+<b>Weapons Detection</b><br>
+Custom weapon detection model
+</td>
+
+<td align="center">
+<img src="assets/images/report.png" width="350"/><br>
+<b>Report</b><br>
+HTML forensic report export
+</td>
+</tr>
+</table>
 
 ## Setup
 
