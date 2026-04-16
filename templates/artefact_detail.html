@@ -25,17 +25,31 @@
     {% if records %}
     <div style="display:flex; justify-content:space-between; align-items:center;
                 margin-bottom:0.8rem; flex-wrap:wrap; gap:0.5rem;">
-        <p style="color:#8b949e; font-size:0.85rem;">
-            Showing {{ start + 1 }}–{{ end }} of {{ total }} records
-            {% if query %}matching "{{ query }}"{% endif %}
+        <p style="color:#8b949e; font-size:0.82rem;">
+            Showing {{ start + 1 }}–{{ end }} of {{ total }} result(s)
+            {% if query %}for "{{ query }}"{% endif %}
         </p>
         <div style="display:flex; align-items:center; gap:0.5rem;">
-            <label style="color:#8b949e; font-size:0.8rem;">Scale:</label>
-            <select id="scaleSelect" style="font-size:0.8rem; padding:0.2rem 0.4rem;">
-                <option value="0.75rem">Compact</option>
-                <option value="0.85rem" selected>Normal</option>
-                <option value="1rem">Large</option>
-            </select>
+            <label style="color:#8b949e; font-size:0.78rem; white-space:nowrap;">
+                Zoom:
+            </label>
+            <button onclick="changeZoom(-10)"
+                    style="background:#21262d; border:1px solid #30363d; color:#c9d1d9;
+                           width:26px; height:26px; border-radius:4px; cursor:pointer;
+                           font-size:0.9rem; display:flex; align-items:center;
+                           justify-content:center;">−</button>
+            <span id="zoomLabel"
+                style="color:#c9d1d9; font-size:0.78rem; min-width:38px;
+                       text-align:center;">100%</span>
+            <button onclick="changeZoom(10)"
+                    style="background:#21262d; border:1px solid #30363d; color:#c9d1d9;
+                           width:26px; height:26px; border-radius:4px; cursor:pointer;
+                           font-size:0.9rem; display:flex; align-items:center;
+                           justify-content:center;">+</button>
+            <button onclick="resetZoom()"
+                    style="background:#21262d; border:1px solid #30363d; color:#8b949e;
+                           padding:0 0.5rem; height:26px; border-radius:4px; cursor:pointer;
+                           font-size:0.72rem;">Reset</button>
         </div>
     </div>
 
@@ -91,23 +105,34 @@
 </div>
 
 <script>
-const scaleSelect = document.getElementById('scaleSelect');
-const dataTable   = document.getElementById('dataTable');
-const topScroll   = document.getElementById('topScroll');
-const mainTable   = document.getElementById('mainTable');
-const topInner    = document.getElementById('topScrollInner');
+let zoomLevel = 100;
+
+function changeZoom(delta) {
+    zoomLevel = Math.min(200, Math.max(50, zoomLevel + delta));
+    applyZoom();
+}
+
+function resetZoom() {
+    zoomLevel = 100;
+    applyZoom();
+}
+
+function applyZoom() {
+    const table = document.getElementById('dataTable');
+    const label = document.getElementById('zoomLabel');
+    if (table) table.style.fontSize = (0.82 * zoomLevel / 100).toFixed(3) + 'rem';
+    if (label) label.textContent = zoomLevel + '%';
+    requestAnimationFrame(() => requestAnimationFrame(syncWidth));
+}
+
+const topScroll = document.getElementById('topScroll');
+const mainTable = document.getElementById('mainTable');
+const topInner  = document.getElementById('topScrollInner');
 
 function syncWidth() {
     if (topInner && mainTable) {
         topInner.style.width = mainTable.scrollWidth + 'px';
     }
-}
-
-if (scaleSelect && dataTable) {
-    scaleSelect.addEventListener('change', function () {
-        dataTable.style.fontSize = this.value;
-        requestAnimationFrame(() => requestAnimationFrame(syncWidth));
-    });
 }
 
 if (topScroll && mainTable) {

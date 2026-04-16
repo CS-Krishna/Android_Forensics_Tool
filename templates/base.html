@@ -6,58 +6,259 @@
     <title>Android Forensics Tool</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', sans-serif; background: #0d1117; color: #c9d1d9; }
-        nav { background: #161b22; padding: 1rem 2rem; border-bottom: 1px solid #30363d;
-              display: flex; gap: 2rem; align-items: center; }
-        nav h1 { color: #58a6ff; font-size: 1.1rem; font-weight: 700; margin-right: auto; }
-        nav a { color: #8b949e; text-decoration: none; font-size: 0.9rem; }
-        nav a:hover { color: #58a6ff; }
-        .container { max-width: 1200px; margin: 2rem auto; padding: 0 2rem; }
-        .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px;
-                padding: 1.5rem; margin-bottom: 1.5rem; }
-        .card h2 { color: #58a6ff; margin-bottom: 1rem; font-size: 1rem; }
-        .btn { background: #238636; color: #fff; border: none; padding: 0.5rem 1.2rem;
-               border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            min-height: 100vh;
+        }
+
+        nav {
+            background: #161b22;
+            padding: 0.8rem 2rem;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        nav h1 {
+            color: #58a6ff;
+            font-size: 1rem;
+            font-weight: 700;
+            margin-right: auto;
+            white-space: nowrap;
+        }
+
+        nav a {
+            color: #8b949e;
+            text-decoration: none;
+            font-size: 0.85rem;
+            padding: 0.35rem 0.8rem;
+            border-radius: 6px;
+            transition: background 0.15s;
+            white-space: nowrap;
+        }
+
+        nav a:hover { background: #21262d; color: #c9d1d9; }
+        nav a.active { background: #21262d; color: #58a6ff; }
+
+        /* Full width container */
+        .container {
+            width: 100%;
+            max-width: 100%;
+            padding: 1.5rem 2rem;
+        }
+
+        .card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            width: 100%;
+        }
+
+        .card h2 {
+            color: #58a6ff;
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }
+
+        .btn {
+            background: #238636;
+            color: #fff;
+            border: none;
+            padding: 0.45rem 1.1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            text-decoration: none;
+            display: inline-block;
+            white-space: nowrap;
+        }
+
         .btn:hover { background: #2ea043; }
-        .btn-secondary { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; }
+
+        .btn-secondary {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+        }
+
         .btn-secondary:hover { background: #30363d; }
-        input, select { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9;
-                        padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.9rem; }
-        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-        th { background: #21262d; color: #8b949e; padding: 0.6rem; text-align: left;
-             border-bottom: 1px solid #30363d; }
-        td { padding: 0.5rem 0.6rem; border-bottom: 1px solid #21262d; word-break: break-word; }
-        tr:hover td { background: #161b22; }
-        .badge { background: #238636; color: #fff; padding: 0.2rem 0.6rem;
-                 border-radius: 12px; font-size: 0.75rem; }
-        .status { padding: 0.8rem; border-radius: 6px; margin-top: 1rem; display: none; }
-        .status.success { background: #0f2a1a; border: 1px solid #238636; color: #3fb950; display: block; }
-        .status.error { background: #2a0f0f; border: 1px solid #da3633; color: #f85149; display: block; }
-	.table-wrap {
+
+        .btn-danger {
+            background: #2a0f0f;
+            border: 1px solid #da3633;
+            color: #f85149;
+        }
+
+        .btn-danger:hover { background: #3d1212; }
+
+        input, select {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            width: 100%;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+
+        /* Tables — full width, compact */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+            table-layout: auto;
+        }
+
+        th {
+            background: #21262d;
+            color: #8b949e;
+            padding: 0.5rem 0.7rem;
+            text-align: left;
+            border-bottom: 2px solid #30363d;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        td {
+            padding: 0.4rem 0.7rem;
+            border-bottom: 1px solid #21262d;
+            word-break: break-word;
+            vertical-align: top;
+            max-width: 280px;
+        }
+
+        tr:hover td { background: #1c2128; }
+
+        /* Table scale options */
+        table.compact { font-size: 0.75rem; }
+        table.compact td, table.compact th { padding: 0.25rem 0.5rem; }
+        table.large { font-size: 0.95rem; }
+        table.large td, table.large th { padding: 0.55rem 0.8rem; }
+
+        /* Scrollable table wrapper — full width */
+        .table-wrap {
             overflow-x: auto;
+            width: 100%;
             scrollbar-width: thin;
             scrollbar-color: #30363d #0d1117;
         }
-        .table-wrap::-webkit-scrollbar { height: 8px; }
+
+        .table-wrap::-webkit-scrollbar { height: 6px; }
         .table-wrap::-webkit-scrollbar-track { background: #0d1117; }
         .table-wrap::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+
+        /* Top scrollbar mirror */
         .scroll-top-wrapper {
-            overflow-x: auto; overflow-y: hidden; height: 12px; margin-bottom: 2px;
-            scrollbar-width: thin; scrollbar-color: #30363d #0d1117;
+            overflow-x: auto;
+            overflow-y: hidden;
+            height: 10px;
+            margin-bottom: 2px;
+            scrollbar-width: thin;
+            scrollbar-color: #30363d #0d1117;
         }
-        .scroll-top-wrapper::-webkit-scrollbar { height: 8px; }
+
+        .scroll-top-wrapper::-webkit-scrollbar { height: 6px; }
         .scroll-top-wrapper::-webkit-scrollbar-track { background: #0d1117; }
         .scroll-top-wrapper::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
         .scroll-top-inner { height: 1px; }
+
+        .badge {
+            background: #238636;
+            color: #fff;
+            padding: 0.15rem 0.5rem;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
+
+        .status {
+            padding: 0.7rem 1rem;
+            border-radius: 6px;
+            margin-top: 0.8rem;
+            display: none;
+            font-size: 0.85rem;
+        }
+
+        .status.success {
+            background: #0f2a1a;
+            border: 1px solid #238636;
+            color: #3fb950;
+            display: block;
+        }
+
+        .status.error {
+            background: #2a0f0f;
+            border: 1px solid #da3633;
+            color: #f85149;
+            display: block;
+        }
+
+        /* Page tabs (for SMS/Artefact detail views) */
+        .page-tabs {
+            display: flex;
+            gap: 0.3rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid #30363d;
+            padding-bottom: 0;
+            flex-wrap: wrap;
+        }
+
+        .page-tab {
+            padding: 0.5rem 1rem;
+            color: #8b949e;
+            text-decoration: none;
+            font-size: 0.85rem;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            white-space: nowrap;
+        }
+
+        .page-tab:hover { color: #c9d1d9; }
+        .page-tab.active { color: #58a6ff; border-bottom-color: #58a6ff; }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 0.3rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .pagination a, .pagination span {
+            padding: 0.3rem 0.65rem;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            text-decoration: none;
+        }
+
+        .pagination a { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }
+        .pagination a:hover { background: #30363d; }
+        .pagination span.current { background: #238636; color: #fff; }
+        .pagination span.ellipsis { color: #8b949e; }
     </style>
 </head>
 <body>
     <nav>
         <h1>🔍 Android Forensics</h1>
-        <a href="/">Dashboard</a>
-        <a href="/artefacts">Artefacts</a>
-        <a href="/sms">SMS Search</a>
-        <a href="/images">Image Analysis</a>
+        <a href="/" {% if request.path == '/' %}class="active"{% endif %}>Dashboard</a>
+        <a href="/artefacts" {% if request.path.startswith('/artefacts') %}class="active"{% endif %}>Artefacts</a>
+        <a href="/sms" {% if request.path == '/sms' %}class="active"{% endif %}>SMS Search</a>
+        <a href="/images" {% if request.path == '/images' %}class="active"{% endif %}>Image Analysis</a>
     </nav>
     <div class="container">
         {% block content %}{% endblock %}
@@ -67,22 +268,22 @@
             const form = document.getElementById(formId);
             const status = document.getElementById(statusId);
             const data = new FormData(form);
-            status.className = "status";
-            status.textContent = "Running...";
-            status.style.display = "block";
+            status.className = 'status';
+            status.textContent = 'Running...';
+            status.style.display = 'block';
             try {
-                const res = await fetch(url, { method: "POST", body: data });
+                const res = await fetch(url, { method: 'POST', body: data });
                 const json = await res.json();
                 if (json.error) {
-                    status.className = "status error";
-                    status.textContent = "Error: " + json.error;
+                    status.className = 'status error';
+                    status.textContent = 'Error: ' + json.error;
                 } else {
-                    status.className = "status success";
+                    status.className = 'status success';
                     status.textContent = JSON.stringify(json);
                 }
             } catch(e) {
-                status.className = "status error";
-                status.textContent = "Request failed: " + e;
+                status.className = 'status error';
+                status.textContent = 'Request failed: ' + e;
             }
         }
     </script>

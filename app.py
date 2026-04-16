@@ -124,6 +124,35 @@ def ingest():
     if isinstance(result, dict) and "error" in result:
         return jsonify(result), 400
 
+    # Compute and store SHA256 of the original evidence file
+    import hashlib
+    try:
+        h = hashlib.sha256()
+        evidence_path = Path(input_path)
+        with open(evidence_path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(65536), b""):
+                h.update(chunk)
+        evidence_hash = h.hexdigest()
+        # Store in case registry
+        registry = load_registry()
+        if case["id"] in registry["cases"]:
+            registry["cases"][case["id"]]["evidence_hash"] = evidence_hash
+            registry["cases"][case["id"]]["evidence_file"] = evidence_path.name
+            save_registry(registry)
+    except Exception:
+        evidence_hash = "unavailable"
+
+    @app.route("/case-hash-pdf/<case_id>")
+    def serve_hash_pdf(case_id):
+        case = get_case(case_id)
+        if not case:
+            return "Case not found", 404
+        raw_dir = Path(case["path"]) / "raw"
+        for f in raw_dir.rglob("*"):
+            if "hash" in f.name.lower() and f.suffix.lower() == ".pdf":
+                return send_file(str(f), mimetype="application/pdf")
+        return "No hash PDF found", 404
+
     # Sort images
     sort_summary = sort_files(str(raw_dir), str(imgs_dir))
 
@@ -159,6 +188,10 @@ def run_yolo():
         out = case_path(case, "yolo_results.json")
         with open(out, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=2)
+        # Check if request came from images page or dashboard
+        referrer = request.referrer or ""
+        if "/images" in referrer:
+            return redirect(url_for("image_analysis"))
         return jsonify({
             "status": "success",
             "images_analysed": len(results.get("analysed", [])),
@@ -215,6 +248,15 @@ def artefact_detail(name):
     page = int(request.args.get("page", 1))
     per_page = 50
 
+    # Strip bare # and Unnamed index columns from display
+    for art_name, art_content in [( name, artefact )]:
+        if "records" in art_content:
+            art_content["records"] = [
+                {k: v for k, v in r.items()
+                 if k.strip() not in ("#", "Unnamed: 0")}
+                for r in art_content["records"]
+            ]
+
     all_records = artefact.get("records", [])
     if query:
         all_records = [r for r in all_records
@@ -237,22 +279,76 @@ def artefact_detail(name):
 
 @app.route("/sms")
 def sms_search():
+    from modules.report_generator import extract_hash_values, build_timeline
     case = get_active_case()
     data = load_normalised(case) if case else {}
-    query = request.args.get("q", "").strip().lower()
+    query = request.args.get("q", "").strip()
+    active_tab = request.args.get("tab", "sms")
     page = int(request.args.get("page", 1))
+    # Timeline filters
+    tl_from = request.args.get("tl_from", "").strip()
+    tl_to = request.args.get("tl_to", "").strip()
     per_page = 50
     all_results = []
 
+    # Build timeline and hashes
+    timeline = []
+    hashes = []
+    if case:
+        raw_timeline = build_timeline(data.get("artefacts", {}))
+        # Apply time filters
+        filtered_timeline = raw_timeline
+        if tl_from:
+            filtered_timeline = [e for e in filtered_timeline
+                                  if e["date"] >= tl_from]
+        if tl_to:
+            filtered_timeline = [e for e in filtered_timeline
+                                  if e["date"] <= tl_to]
+        timeline = filtered_timeline
+        raw_dir = case_path(case, "raw")
+        hashes = extract_hash_values(raw_dir)
+
+    # SMS search — handle #N serial search
+    query_lower = query.lower()
+    serial_search = None
+    if query.startswith("#") and query[1:].strip().isdigit():
+        serial_search = int(query[1:].strip())
+
     sms_keywords = ["sms", "message", "mms", "chat", "whatsapp"]
+    record_counter = {}  # track serial per artefact
+
     for name, content in data.get("artefacts", {}).items():
         if any(kw in name.lower() for kw in sms_keywords):
+            if name not in record_counter:
+                record_counter[name] = 0
             for record in content.get("records", []):
-                if query:
-                    if any(query in str(v).lower() for v in record.values()):
-                        all_results.append({"artefact": name, "record": record})
+                record_counter[name] += 1
+                serial = record_counter[name]
+
+                clean_record = {k: v for k, v in record.items()
+                                if k.strip() not in ("#", "Unnamed: 0")}
+                
+                if serial_search is not None:
+                    if serial == serial_search:
+                        all_results.append({
+                            "artefact": name,
+                            "serial": serial,
+                            "record": clean_record
+                        })
+                elif query_lower:
+                    if any(query_lower in str(v).lower()
+                        for v in record.values()):
+                        all_results.append({
+                            "artefact": name,
+                            "serial": serial,
+                            "record": clean_record
+                        })
                 else:
-                    all_results.append({"artefact": name, "record": record})
+                    all_results.append({
+                        "artefact": name,
+                        "serial": serial,
+                        "record": clean_record
+                    })
 
     total = len(all_results)
     total_pages = max(1, (total + per_page - 1) // per_page)
@@ -264,7 +360,12 @@ def sms_search():
                            results=all_results[start:end],
                            query=query, page=page,
                            total=total, total_pages=total_pages,
-                           start=start, end=end)
+                           start=start, end=end,
+                           active_tab=active_tab,
+                           timeline=timeline,
+                           tl_from=tl_from,
+                           tl_to=tl_to,
+                           hashes=hashes)
 
 
 # ── Image Analysis ────────────────────────────────────────
@@ -280,40 +381,62 @@ def image_analysis():
     skipped = []
     all_tags = []
     total_images = 0
+    not_yet_analysed = False
 
     if case:
         results_path = case_path(case, "yolo_results.json")
-        if results_path.exists():
-            with open(results_path, encoding="utf-8") as f:
-                data = json.load(f)
-            analysed = data.get("analysed", [])
-            skipped = data.get("skipped", [])
-            total_images = len(analysed)
+        images_dir = case_path(case, "images")
 
-            # Build tag summary
-            tag_counts = {}
-            for img in analysed:
-                for det in img.get("label_summary", []):
-                    label = det["label"]
-                    if label not in tag_counts:
-                        tag_counts[label] = {"label": label, "count": 0,
-                                             "source": det["source"]}
-                    tag_counts[label]["count"] += 1
-            all_tags = sorted(tag_counts.values(),
-                              key=lambda x: (0 if x["source"] == "weapon" else 1,
-                                             x["label"]))
+        if not results_path.exists():
+            # Check if there are images waiting to be analysed
+            supported = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+            try:
+                image_count = len([f for f in images_dir.iterdir()
+                                   if f.suffix.lower() in supported])
+            except Exception:
+                image_count = 0
+            not_yet_analysed = True
+            return render_template("images.html", case=case,
+                                   not_yet_analysed=True,
+                                   pending_images=image_count,
+                                   results=[], skipped=[],
+                                   query=query, active_tag=active_tag,
+                                   show_small=show_small,
+                                   view_mode=view_mode,
+                                   all_tags=[], total_images=0,
+                                   min_size_kb=5)
 
-            # Filter
-            if active_tag:
-                analysed = [r for r in analysed
-                            if any(d["label"] == active_tag
-                                   for d in r.get("label_summary", []))]
-            elif query:
-                analysed = [r for r in analysed
-                            if any(query in d["label"].lower()
-                                   for d in r.get("label_summary", []))]
+        with open(results_path, encoding="utf-8") as f:
+            data = json.load(f)
+        analysed = data.get("analysed", [])
+        skipped = data.get("skipped", [])
+        total_images = len(analysed)
+
+        # Build tag summary
+        tag_counts = {}
+        for img in analysed:
+            for det in img.get("label_summary", []):
+                label = det["label"]
+                if label not in tag_counts:
+                    tag_counts[label] = {"label": label, "count": 0,
+                                         "source": det["source"]}
+                tag_counts[label]["count"] += 1
+        all_tags = sorted(tag_counts.values(),
+                          key=lambda x: (0 if x["source"] == "weapon" else 1,
+                                         x["label"]))
+
+        if active_tag:
+            analysed = [r for r in analysed
+                        if any(d["label"] == active_tag
+                               for d in r.get("label_summary", []))]
+        elif query:
+            analysed = [r for r in analysed
+                        if any(query in d["label"].lower()
+                               for d in r.get("label_summary", []))]
 
     return render_template("images.html", case=case,
+                           not_yet_analysed=False,
+                           pending_images=0,
                            results=analysed, skipped=skipped,
                            query=query, active_tag=active_tag,
                            show_small=show_small, view_mode=view_mode,

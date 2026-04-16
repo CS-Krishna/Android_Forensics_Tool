@@ -18,51 +18,177 @@ def encode_image(img_path: Path) -> str | None:
         return None
 
 
-def extract_hash_values(raw_dir: Path) -> list:
-    """Look for hash value text files in the raw directory."""
+def extract_hash_values(raw_dir) -> list:
+    """
+    Looks for existing hash files exported by the acquisition tool.
+    Supports txt, csv, md, and pdf. Does not auto-generate individual file hashes.
+    """
+    raw_dir = Path(raw_dir)
     hashes = []
-    for f in raw_dir.rglob("*Hash*"):
-        if f.suffix.lower() in {".txt", ".csv", ".md"}:
+
+    if not raw_dir.exists():
+        return [{"file": "Error", "content": f"Raw directory not found: {raw_dir}"}]
+
+    text_extensions = {".txt", ".csv", ".md"}
+
+    for f in raw_dir.rglob("*"):
+        if not f.is_file():
+            continue
+        if "hash" in f.name.lower():
+            if f.suffix.lower() in text_extensions:
+                try:
+                    hashes.append({
+                        "file": f.name,
+                        "content": f.read_text(errors="replace")
+                    })
+                except Exception:
+                    pass
+            elif f.suffix.lower() == ".pdf":
+                hashes.append({
+                    "file": f.name,
+                    "content": (
+                        f"[PDF hash file found: {f.name}]\n"
+                        f"Location: {f}\n\n"
+                        f"This file was exported by the acquisition tool and contains "
+                        f"the original device image hash values.\n"
+                        f"Please open it directly from the case raw folder to verify integrity."
+                    )
+                })
+
+    if not hashes:
+        hashes.append({
+            "file": "No Acquisition Hash File Found",
+            "content": (
+                "No hash file was found in the evidence package.\n\n"
+                "For forensic integrity, the acquiring tool (FTK Imager, "
+                "Oxygen Forensic, etc.) should generate a hash file alongside "
+                "the device image at acquisition time.\n\n"
+                "The SHA256 of the ingested evidence file is stored in the "
+                "case metadata (cases/cases.json) and can be used to verify "
+                "the evidence has not been modified since ingestion."
+            )
+        })
+
+    return hashes
+
+    # No hash files found — auto-generate SHA256 for all files
+    lines = []
+    try:
+        all_files = sorted([f for f in raw_dir.rglob("*") if f.is_file()])
+        capped = len(all_files) > 500
+        display_files = all_files[:500] if capped else all_files
+
+        lines.append("# Auto-generated SHA256 Hashes\n")
+        lines.append(f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        lines.append(f"# Files: {len(display_files)}"
+                     f"{' (capped at 500 of ' + str(len(all_files)) + ' total)' if capped else ''}\n")
+        lines.append("-" * 80 + "\n")
+
+        for f in display_files:
             try:
-                hashes.append({"file": f.name, "content": f.read_text(errors="replace")})
-            except Exception:
-                pass
+                h = hashlib.sha256()
+                with open(f, "rb") as fh:
+                    for chunk in iter(lambda: fh.read(65536), b""):
+                        h.update(chunk)
+                try:
+                    rel = str(f.relative_to(raw_dir))
+                except ValueError:
+                    rel = f.name
+                lines.append(f"{h.hexdigest()}  {rel}\n")
+            except Exception as e:
+                lines.append(f"ERROR  {f.name}: {e}\n")
+
+        hashes.append({
+            "file": "Auto-generated SHA256 Hashes",
+            "content": "".join(lines)
+        })
+
+    except Exception as e:
+        hashes.append({
+            "file": "Hash Generation Error",
+            "content": str(e)
+        })
+
     return hashes
 
 
 def build_timeline(artefacts: dict) -> list:
-    """
-    Attempts to build a timeline by finding date-like fields
-    across all artefact records.
-    """
-    date_keywords = ["date", "time", "timestamp", "datetime", "created", "sent", "received"]
+    date_keywords   = ["date", "time", "timestamp", "datetime", "created", "sent", "received"]
+    direction_kw    = ["direction", "folder"]
+    from_kw         = ["from", "sender"]
+    to_kw           = ["to", "recipient"]
+    skip_kw         = ["unnamed", "index"]   # removed "#" — handled separately below
+
     events = []
 
     for artefact_name, content in artefacts.items():
-        for record in content.get("records", []):
-            date_val = None
-            date_key = None
+        records = content.get("records", []) if isinstance(content, dict) else []
+        for serial, record in enumerate(records, start=1):
+            date_val      = None
+            date_key      = None
+            direction_val = ""
+            from_val      = ""
+            to_val        = ""
+            summary       = ""
+
             for k, v in record.items():
-                if any(kw in k.lower() for kw in date_keywords) and v and str(v).strip():
-                    date_val = str(v).strip()
+                kl = k.lower().strip()
+                vs = str(v).strip() if v and str(v).strip() not in ("", "nan", "None") else ""
+                if not vs:
+                    continue
+                # Skip purely unnamed/index columns
+                if any(sk in kl for sk in skip_kw):
+                    continue
+                # Skip bare # column (serial index from xlsx)
+                if kl == "#":
+                    continue
+
+                if date_val is None and any(kw in kl for kw in date_keywords):
+                    date_val = vs
                     date_key = k
-                    break
+                    continue
+
+                # Exact or prefix match for direction
+                if not direction_val and any(kl == kw or kl.startswith(kw) for kw in direction_kw):
+                    direction_val = vs
+                    continue
+
+                # From — exact match first, then prefix
+                if not from_val and any(kl == kw or kl.startswith(kw) for kw in from_kw):
+                    from_val = vs[:80]
+                    continue
+
+                # To — exact match first
+                if not to_val and any(kl == kw or kl.startswith(kw) for kw in to_kw):
+                    to_val = vs[:80]
+                    continue
+
+            # Summary — first remaining meaningful field
+            for k, v in record.items():
+                kl = k.lower().strip()
+                vs = str(v).strip() if v and str(v).strip() not in ("", "nan", "None") else ""
+                if not vs or k == date_key or kl == "#":
+                    continue
+                if any(sk in kl for sk in skip_kw):
+                    continue
+                if any(kw in kl for kw in date_keywords + direction_kw + from_kw + to_kw):
+                    continue
+                summary = vs[:120]
+                break
+
             if date_val:
-                # Get a summary field — first non-date, non-empty value
-                summary = ""
-                for k, v in record.items():
-                    if k != date_key and v and str(v).strip():
-                        summary = str(v)[:120]
-                        break
                 events.append({
-                    "date": date_val,
-                    "artefact": artefact_name,
-                    "summary": summary
+                    "date":      date_val,
+                    "artefact":  artefact_name,
+                    "serial":    serial,
+                    "direction": direction_val,
+                    "from_val":  from_val,
+                    "to_val":    to_val,
+                    "summary":   summary
                 })
 
-    # Sort by date string — works for ISO-format dates
     events.sort(key=lambda x: x["date"])
-    return events[:500]  # cap at 500 events for report size
+    return events[:500]
 
 
 def generate_report(case: dict, normalised: dict, yolo_path: Path,

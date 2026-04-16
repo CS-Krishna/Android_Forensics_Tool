@@ -79,6 +79,16 @@
         ID: {{ case.id }} &nbsp;|&nbsp; Created: {{ case.created[:19] | replace('T',' ') }}
     </p>
     <p>Artefacts parsed: <span class="badge">{{ artefact_count }}</span></p>
+    {% if case.evidence_hash %}
+    <p style="font-size:0.82rem; color:#8b949e; margin-top:0.5rem;">
+    Evidence file:
+    <span style="color:#c9d1d9;">{{ case.evidence_file }}</span>
+    </p>
+    <p style="font-family:monospace; font-size:0.75rem; color:#8b949e;
+              word-break:break-all; margin-top:0.2rem;">
+        SHA256: <span style="color:#3fb950;">{{ case.evidence_hash }}</span>
+    </p>
+{% endif %}
     <!-- Export Report -->
     <div style="margin-top:1rem; padding-top:1rem; border-top:1px solid #30363d;">
         <h2 style="margin-bottom:0.8rem;">Export Report</h2>
@@ -231,7 +241,17 @@ async function postAction(url, formId, statusId) {
     status.textContent = 'Running...';
     status.style.display = 'block';
     try {
-        const res = await fetch(url, { method: 'POST', body: new FormData() });
+        const res = await fetch(url, {
+            method: 'POST',
+            body: new FormData(),
+            redirect: 'follow'
+        });
+        // If redirected to images page, just report success
+        if (res.url && res.url.includes('/images')) {
+            status.className = 'status success';
+            status.textContent = '✓ Analysis complete. View results on the Image Analysis page.';
+            return;
+        }
         const json = await res.json();
         if (json.error) {
             status.className = 'status error';

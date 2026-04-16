@@ -1,29 +1,260 @@
 {% extends "base.html" %}
 {% block content %}
+
+<!-- Page tabs — preserve all filter state in URLs -->
+<div class="page-tabs">
+    <a href="/sms?tab=sms&q={{ query }}"
+       class="page-tab {% if active_tab == 'sms' or not active_tab %}active{% endif %}">
+        💬 SMS / MMS
+    </a>
+    <a href="/sms?tab=timeline&tl_from={{ tl_from }}&tl_to={{ tl_to }}"
+       class="page-tab {% if active_tab == 'timeline' %}active{% endif %}">
+        📅 Timeline
+        {% if timeline %}
+        <span style="background:#238636; color:#fff; padding:0.1rem 0.4rem;
+                     border-radius:8px; font-size:0.7rem; margin-left:0.3rem;">
+            {{ timeline|length }}
+        </span>
+        {% endif %}
+    </a>
+    <a href="/sms?tab=hashes"
+       class="page-tab {% if active_tab == 'hashes' %}active{% endif %}">
+        🔑 Hash Values
+    </a>
+</div>
+
+{% if active_tab == 'timeline' %}
+<!-- ══ TIMELINE TAB ══════════════════════════════════ -->
+<div class="card">
+    <h2>Event Timeline</h2>
+
+    <!-- Filter bar -->
+    <form method="GET" action="/sms"
+          style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem;
+                 align-items:flex-end;">
+        <input type="hidden" name="tab" value="timeline">
+        <div style="display:flex; flex-direction:column; gap:0.3rem;">
+            <label style="color:#8b949e; font-size:0.75rem;">From date/time</label>
+            <input type="datetime-local" name="tl_from"
+                   value="{{ tl_from }}"
+                   style="width:200px; font-size:0.82rem;">
+        </div>
+        <div style="display:flex; flex-direction:column; gap:0.3rem;">
+            <label style="color:#8b949e; font-size:0.75rem;">To date/time</label>
+            <input type="datetime-local" name="tl_to"
+                   value="{{ tl_to }}"
+                   style="width:200px; font-size:0.82rem;">
+        </div>
+        <div style="display:flex; gap:0.5rem; align-items:flex-end;">
+            <button type="submit" class="btn">Filter</button>
+            <a href="/sms?tab=timeline" class="btn btn-secondary">Clear</a>
+        </div>
+    </form>
+
+    {% if tl_from or tl_to %}
+    <p style="color:#e3b341; font-size:0.8rem; margin-bottom:0.8rem;">
+        ⚡ Filtered:
+        {% if tl_from %}from {{ tl_from | replace('T', ' ') }}{% endif %}
+        {% if tl_to %}to {{ tl_to | replace('T', ' ') }}{% endif %}
+        — {{ timeline|length }} event(s)
+    </p>
+    {% endif %}
+
+    {% if timeline %}
+    <p style="color:#8b949e; font-size:0.8rem; margin-bottom:0.8rem;">
+        {{ timeline|length }} events sorted chronologically.
+        Click any event to view it in SMS Search.
+    </p>
+
+    <div style="overflow-y:auto; max-height:65vh; border:1px solid #30363d;
+                border-radius:6px;">
+        <table style="width:100%;">
+            <thead>
+                <tr>
+                    <th style="min-width:175px;">Date / Time</th>
+                    <th style="min-width:100px;">Artefact</th>
+                    <th style="min-width:45px;">#</th>
+                    <th style="min-width:90px;">Direction</th>
+                    <th style="min-width:140px;">From</th>
+                    <th style="min-width:140px;">To</th>
+                    <th>Summary</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for event in timeline %}
+            <tr>
+                <td style="font-family:monospace; font-size:0.8rem; color:#8b949e; white-space:nowrap;">
+                    {{ event.date }}
+                </td>
+                <td>
+                    <span class="badge">{{ event.artefact }}</span>
+                </td>
+                <td style="color:#58a6ff; font-size:0.8rem; white-space:nowrap;">
+                    #{{ event.serial }}
+                </td>
+                <td>
+                    {% if event.direction %}
+                    <span style="padding:0.15rem 0.5rem; border-radius:10px; font-size:0.75rem;
+                                {% if 'incoming' in event.direction.lower() %}
+                                background:#1f3d2e; color:#3fb950;
+                                {% elif 'outgoing' in event.direction.lower() or 'sent' in event.direction.lower() %}
+                                background:#1a2840; color:#58a6ff;
+                                {% else %}
+                                background:#21262d; color:#8b949e;
+                                {% endif %}">
+                        {{ event.direction }}
+                    </span>
+                    {% endif %}
+                </td>
+                <td style="font-size:0.8rem; color:#c9d1d9; max-width:140px;
+                           overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                    {{ event.from_val }}
+                </td>
+                <td style="font-size:0.8rem; color:#c9d1d9; max-width:140px;
+                           overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                    {{ event.to_val }}
+                </td>
+                <td>
+                    <a href="/sms?tab=sms&q=%23{{ event.serial }}&tl_from={{ tl_from }}&tl_to={{ tl_to }}"
+                       style="color:#c9d1d9; text-decoration:none; font-size:0.82rem;">
+                        {{ event.summary }}
+                        <span style="color:#58a6ff; font-size:0.72rem; margin-left:0.3rem;">↗</span>
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p style="color:#8b949e;">
+        No timeline events found
+        {% if tl_from or tl_to %}within the selected time range{% endif %}.
+        {% if not tl_from and not tl_to %}Ingest evidence first.{% endif %}
+    </p>
+    {% endif %}
+</div>
+
+
+<!-- ══ HASHES TAB ════════════════════════════════════ -->
+{% elif active_tab == 'hashes' %}
+<div class="card">
+    <h2>Hash Values</h2>
+    {% if hashes %}
+    {% for h in hashes %}
+    <p style="font-weight:600; color:#58a6ff; margin-bottom:0.5rem;">
+        {{ h.file }}
+    </p>
+    {% if '.pdf' in h.file.lower() and case %}
+    <!-- Embed PDF inline -->
+    <div style="margin-bottom:1rem;">
+        <iframe src="/case-hash-pdf/{{ case.id }}"
+                style="width:100%; height:600px; border:1px solid #30363d;
+                       border-radius:6px; background:#fff;">
+        </iframe>
+        <p style="color:#8b949e; font-size:0.78rem; margin-top:0.4rem;">
+            If the PDF does not display,
+            <a href="/case-hash-pdf/{{ case.id }}" target="_blank"
+               style="color:#58a6ff;">open it in a new tab ↗</a>
+        </p>
+    </div>
+    {% else %}
+    <div style="background:#0d1117; border:1px solid #30363d; border-radius:6px;
+                padding:0.8rem; font-family:monospace; font-size:0.75rem;
+                white-space:pre-wrap; word-break:break-all;
+                max-height:400px; overflow-y:auto;
+                margin-bottom:1rem; line-height:1.6;">{{ h.content }}</div>
+    {% endif %}
+    {% endfor %}
+    {% else %}
+    <p style="color:#8b949e;">No hash file found.</p>
+    {% endif %}
+
+    <!-- Always show ingestion hash if available -->
+    {% if case and case.evidence_hash %}
+    <div style="margin-top:1.5rem; padding-top:1rem; border-top:1px solid #30363d;">
+        <p style="color:#58a6ff; font-weight:600; margin-bottom:0.4rem;">
+            Evidence Ingestion Hash (SHA256)
+        </p>
+        <p style="color:#8b949e; font-size:0.78rem; margin-bottom:0.3rem;">
+            Computed at ingestion time for:
+            <span style="color:#c9d1d9;">{{ case.evidence_file }}</span>
+        </p>
+        <div style="background:#0d1117; border:1px solid #30363d; border-radius:6px;
+                    padding:0.6rem 0.8rem; font-family:monospace; font-size:0.78rem;
+                    color:#3fb950; word-break:break-all;">
+            {{ case.evidence_hash }}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% else %}
+<!-- ══ SMS / MMS TAB ═════════════════════════════════ -->
 <div class="card">
     <h2>SMS / Message Search{% if case %} — {{ case.name }}{% endif %}</h2>
 
-    <form method="GET" action="/sms" style="display:flex; gap:1rem; margin-bottom:1rem;">
-        <input name="q" value="{{ query }}" placeholder="Search messages..." style="flex:1;">
+    <form method="GET" action="/sms"
+          style="display:flex; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap;">
+        <input type="hidden" name="tab" value="sms">
+        <!-- Preserve timeline filter state so back-link works -->
+        <input type="hidden" name="tl_from" value="{{ tl_from }}">
+        <input type="hidden" name="tl_to" value="{{ tl_to }}">
+        <input name="q" value="{{ query }}"
+               placeholder="Search messages... (use #1 to find record #1)"
+               style="flex:1; min-width:200px;">
         <input name="page" type="hidden" value="1">
         <button type="submit" class="btn">Search</button>
-        {% if query %}<a href="/sms" class="btn btn-secondary">Clear</a>{% endif %}
+        {% if query %}
+        <a href="/sms?tab=sms&tl_from={{ tl_from }}&tl_to={{ tl_to }}"
+           class="btn btn-secondary">Clear</a>
+        {% endif %}
     </form>
+
+    {% if tl_from or tl_to %}
+    <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.8rem;
+                font-size:0.8rem; color:#8b949e;">
+        <span>⬅</span>
+        <a href="/sms?tab=timeline&tl_from={{ tl_from }}&tl_to={{ tl_to }}"
+           style="color:#58a6ff; text-decoration:none;">
+            Back to Timeline
+            {% if tl_from or tl_to %}
+            (filter preserved:
+            {% if tl_from %}from {{ tl_from | replace('T', ' ') }}{% endif %}
+            {% if tl_to %}to {{ tl_to | replace('T', ' ') }}{% endif %})
+            {% endif %}
+        </a>
+    </div>
+    {% endif %}
 
     {% if results %}
     <div style="display:flex; justify-content:space-between; align-items:center;
                 margin-bottom:0.8rem; flex-wrap:wrap; gap:0.5rem;">
-        <p style="color:#8b949e; font-size:0.85rem;">
+        <p style="color:#8b949e; font-size:0.82rem;">
             Showing {{ start + 1 }}–{{ end }} of {{ total }} result(s)
             {% if query %}for "{{ query }}"{% endif %}
         </p>
         <div style="display:flex; align-items:center; gap:0.5rem;">
-            <label style="color:#8b949e; font-size:0.8rem;">Scale:</label>
-            <select id="scaleSelect" style="font-size:0.8rem; padding:0.2rem 0.4rem;">
-                <option value="0.75rem">Compact</option>
-                <option value="0.85rem" selected>Normal</option>
-                <option value="1rem">Large</option>
-            </select>
+            <label style="color:#8b949e; font-size:0.78rem; white-space:nowrap;">
+                Zoom:
+            </label>
+            <button onclick="changeZoom(-10)"
+                    style="background:#21262d; border:1px solid #30363d; color:#c9d1d9;
+                           width:26px; height:26px; border-radius:4px; cursor:pointer;
+                           font-size:0.9rem; display:flex; align-items:center;
+                           justify-content:center;">−</button>
+            <span id="zoomLabel"
+                style="color:#c9d1d9; font-size:0.78rem; min-width:38px;
+                       text-align:center;">100%</span>
+            <button onclick="changeZoom(10)"
+                    style="background:#21262d; border:1px solid #30363d; color:#c9d1d9;
+                           width:26px; height:26px; border-radius:4px; cursor:pointer;
+                           font-size:0.9rem; display:flex; align-items:center;
+                           justify-content:center;">+</button>
+            <button onclick="resetZoom()"
+                    style="background:#21262d; border:1px solid #30363d; color:#8b949e;
+                           padding:0 0.5rem; height:26px; border-radius:4px; cursor:pointer;
+                           font-size:0.72rem;">Reset</button>
         </div>
     </div>
 
@@ -34,18 +265,22 @@
         <table id="dataTable">
             <thead>
                 <tr>
-                    <th style="min-width:120px;">Artefact</th>
+                    <th style="min-width:50px;">#</th>
+                    <th style="min-width:110px;">Artefact</th>
                     {% for col in results[0].record.keys() %}
-                    <th style="min-width:140px;">{{ col }}</th>
+                    <th style="min-width:120px;">{{ col }}</th>
                     {% endfor %}
                 </tr>
             </thead>
             <tbody>
             {% for item in results %}
-                <tr>
+                <tr id="record-{{ item.serial }}">
+                    <td style="color:#58a6ff; font-size:0.8rem; white-space:nowrap;">
+                        #{{ item.serial }}
+                    </td>
                     <td><span class="badge">{{ item.artefact }}</span></td>
                     {% for val in item.record.values() %}
-                    <td style="max-width:300px; white-space:pre-wrap; word-break:break-word;">{{ val }}</td>
+                    <td>{{ val }}</td>
                     {% endfor %}
                 </tr>
             {% endfor %}
@@ -53,24 +288,23 @@
         </table>
     </div>
 
+    <!-- Pagination — preserve query and timeline filter state -->
     {% if total_pages > 1 %}
-    <div style="display:flex; justify-content:center; gap:0.4rem; margin-top:1.5rem; flex-wrap:wrap;">
+    <div class="pagination">
         {% if page > 1 %}
-        <a href="?q={{ query }}&page={{ page - 1 }}" class="btn btn-secondary" style="padding:0.3rem 0.7rem;">‹</a>
+        <a href="?tab=sms&q={{ query }}&tl_from={{ tl_from }}&tl_to={{ tl_to }}&page={{ page - 1 }}">‹</a>
         {% endif %}
         {% for p in range(1, total_pages + 1) %}
             {% if p == page %}
-            <span style="padding:0.3rem 0.7rem; background:#238636; color:#fff;
-                         border-radius:6px; font-size:0.85rem;">{{ p }}</span>
+            <span class="current">{{ p }}</span>
             {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
-            <a href="?q={{ query }}&page={{ p }}" class="btn btn-secondary"
-               style="padding:0.3rem 0.7rem;">{{ p }}</a>
+            <a href="?tab=sms&q={{ query }}&tl_from={{ tl_from }}&tl_to={{ tl_to }}&page={{ p }}">{{ p }}</a>
             {% elif p == page - 3 or p == page + 3 %}
-            <span style="color:#8b949e; padding:0.3rem 0.4rem;">…</span>
+            <span class="ellipsis">…</span>
             {% endif %}
         {% endfor %}
         {% if page < total_pages %}
-        <a href="?q={{ query }}&page={{ page + 1 }}" class="btn btn-secondary" style="padding:0.3rem 0.7rem;">›</a>
+        <a href="?tab=sms&q={{ query }}&tl_from={{ tl_from }}&tl_to={{ tl_to }}&page={{ page + 1 }}">›</a>
         {% endif %}
     </div>
     {% endif %}
@@ -78,28 +312,43 @@
     {% elif query %}
     <p style="color:#8b949e;">No results found for "{{ query }}".</p>
     {% else %}
-    <p style="color:#8b949e;">Enter a search term to search through SMS and MMS artefacts.</p>
+    <p style="color:#8b949e;">
+        Enter a search term to find messages, or use #1 to jump to record #1.
+        Leave empty to browse all records.
+    </p>
     {% endif %}
 </div>
+{% endif %}
 
 <script>
-const scaleSelect = document.getElementById('scaleSelect');
-const dataTable   = document.getElementById('dataTable');
-const topScroll   = document.getElementById('topScroll');
-const mainTable   = document.getElementById('mainTable');
-const topInner    = document.getElementById('topScrollInner');
+let zoomLevel = 100;
+
+function changeZoom(delta) {
+    zoomLevel = Math.min(200, Math.max(50, zoomLevel + delta));
+    applyZoom();
+}
+
+function resetZoom() {
+    zoomLevel = 100;
+    applyZoom();
+}
+
+function applyZoom() {
+    const table = document.getElementById('dataTable');
+    const label = document.getElementById('zoomLabel');
+    if (table) table.style.fontSize = (0.82 * zoomLevel / 100).toFixed(3) + 'rem';
+    if (label) label.textContent = zoomLevel + '%';
+    requestAnimationFrame(() => requestAnimationFrame(syncWidth));
+}
+
+const topScroll = document.getElementById('topScroll');
+const mainTable = document.getElementById('mainTable');
+const topInner  = document.getElementById('topScrollInner');
 
 function syncWidth() {
     if (topInner && mainTable) {
         topInner.style.width = mainTable.scrollWidth + 'px';
     }
-}
-
-if (scaleSelect && dataTable) {
-    scaleSelect.addEventListener('change', function () {
-        dataTable.style.fontSize = this.value;
-        requestAnimationFrame(() => requestAnimationFrame(syncWidth));
-    });
 }
 
 if (topScroll && mainTable) {

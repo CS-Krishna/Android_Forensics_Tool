@@ -3,11 +3,45 @@
 <div class="card">
     <h2>Image Analysis{% if case %} — {{ case.name }}{% endif %}</h2>
 
+    {% if not_yet_analysed %}
+    <!-- ══ NOT YET ANALYSED STATE ══════════════════════ -->
+    <div style="background:#1a1a2e; border:1px solid #30363d; border-radius:8px;
+                padding:2rem; text-align:center; margin-top:1rem;">
+        <p style="font-size:1.1rem; color:#c9d1d9; margin-bottom:0.5rem;">
+            📷 Image analysis has not been run yet
+        </p>
+        <p style="color:#8b949e; font-size:0.85rem; margin-bottom:1.5rem;">
+            {% if pending_images > 0 %}
+                {{ pending_images }} image(s) are ready to be analysed in this case.
+            {% else %}
+                No images have been sorted into this case yet.
+                Run an ingest first to extract images from the evidence.
+            {% endif %}
+        </p>
+        {% if pending_images > 0 %}
+        <form method="POST" action="/run_yolo" style="display:inline;">
+            <button type="submit" class="btn"
+                    style="font-size:0.95rem; padding:0.6rem 1.5rem;">
+                ▶ Run Image Analysis Now
+            </button>
+        </form>
+        <p style="color:#555; font-size:0.75rem; margin-top:0.8rem;">
+            Runs both general object detection and weapon detection on all
+            {{ pending_images }} image(s).
+        </p>
+        {% endif %}
+    </div>
+
+    {% else %}
+    <!-- ══ NORMAL ANALYSIS STATE ═══════════════════════ -->
+
     <!-- Search + View Toggle -->
     <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1rem; align-items:center;">
-        <form method="GET" action="/images" style="display:flex; gap:0.5rem; flex:1; min-width:200px;">
+        <form method="GET" action="/images"
+              style="display:flex; gap:0.5rem; flex:1; min-width:200px;">
             <input name="q" value="{{ query }}"
-                   placeholder="Search by label (e.g. guns, knife, person)..." style="flex:1;">
+                   placeholder="Search by label (e.g. guns, knife, person)..."
+                   style="flex:1;">
             <input type="hidden" name="view" value="{{ view_mode }}">
             <button type="submit" class="btn">Search</button>
             {% if query %}
@@ -16,38 +50,48 @@
         </form>
         <div style="display:flex; gap:0.5rem;">
             <a href="/images?q={{ query }}&view=details"
-               style="padding:0.4rem 0.9rem; border-radius:6px; text-decoration:none; font-size:0.85rem;
+               style="padding:0.4rem 0.9rem; border-radius:6px; text-decoration:none;
+                      font-size:0.85rem;
                       {% if view_mode == 'details' %}background:#238636; color:#fff;
-                      {% else %}background:#21262d; color:#c9d1d9; border:1px solid #30363d;{% endif %}">
+                      {% else %}background:#21262d; color:#c9d1d9;
+                                border:1px solid #30363d;{% endif %}">
                 ☰ Details
             </a>
             <a href="/images?q={{ query }}&view=grid"
-               style="padding:0.4rem 0.9rem; border-radius:6px; text-decoration:none; font-size:0.85rem;
+               style="padding:0.4rem 0.9rem; border-radius:6px; text-decoration:none;
+                      font-size:0.85rem;
                       {% if view_mode == 'grid' %}background:#238636; color:#fff;
-                      {% else %}background:#21262d; color:#c9d1d9; border:1px solid #30363d;{% endif %}">
+                      {% else %}background:#21262d; color:#c9d1d9;
+                                border:1px solid #30363d;{% endif %}">
                 ⊞ Grid
             </a>
         </div>
     </div>
 
-    <!-- Tag filter bar — outside the search row -->
+    <!-- Tag filter bar -->
     {% if all_tags %}
     <div style="margin-bottom:1rem;">
-        <p style="color:#8b949e; font-size:0.78rem; margin-bottom:0.5rem;">Filter by tag:</p>
+        <p style="color:#8b949e; font-size:0.78rem; margin-bottom:0.5rem;">
+            Filter by tag:
+        </p>
         <div style="display:flex; flex-wrap:wrap; gap:0.4rem;">
             <a href="/images?view={{ view_mode }}"
-               style="padding:0.25rem 0.7rem; border-radius:12px; text-decoration:none; font-size:0.78rem;
+               style="padding:0.25rem 0.7rem; border-radius:12px;
+                      text-decoration:none; font-size:0.78rem;
                       {% if not active_tag %}background:#58a6ff; color:#000;
-                      {% else %}background:#21262d; color:#c9d1d9; border:1px solid #30363d;{% endif %}">
+                      {% else %}background:#21262d; color:#c9d1d9;
+                                border:1px solid #30363d;{% endif %}">
                 All ({{ total_images }})
             </a>
             {% for tag in all_tags %}
             <a href="/images?tag={{ tag.label }}&view={{ view_mode }}"
-               style="padding:0.25rem 0.7rem; border-radius:12px; text-decoration:none; font-size:0.78rem;
+               style="padding:0.25rem 0.7rem; border-radius:12px;
+                      text-decoration:none; font-size:0.78rem;
                       {% if active_tag == tag.label %}
                           {% if tag.source == 'weapon' %}background:#da3633;
                           {% else %}background:#1f6feb;{% endif %} color:#fff;
-                      {% else %}background:#21262d; color:#c9d1d9; border:1px solid #30363d;{% endif %}">
+                      {% else %}background:#21262d; color:#c9d1d9;
+                                border:1px solid #30363d;{% endif %}">
                 {% if tag.source == 'weapon' %}🔴{% else %}🔵{% endif %}
                 {{ tag.label }} ({{ tag.count }})
             </a>
@@ -65,8 +109,8 @@
                 padding:0.8rem 1rem; margin-bottom:1rem; font-size:0.85rem;">
         <p style="color:#e3b341; margin-bottom:0.4rem;">
             ⚠️ <strong>{{ skipped|length }} image(s) were not analysed</strong>
-            — they are under 5 KB and are most likely thumbnails or placeholder icons,
-            not real photographs.
+            — they are under {{ min_size_kb }} KB and are most likely thumbnails
+            or placeholder icons, not real photographs.
         </p>
         <div style="display:flex; gap:1rem; margin-top:0.5rem; flex-wrap:wrap;">
             <a href="/images?q={{ query }}&view={{ view_mode }}&show_small=1"
@@ -88,19 +132,21 @@
     {% if show_small and skipped %}
     <div class="card" style="margin-bottom:1rem;">
         <h2 style="font-size:0.9rem; margin-bottom:0.8rem;">
-            Small Files (under 5 KB) — likely thumbnails
+            Small Files (under {{ min_size_kb }} KB) — likely thumbnails
         </h2>
         <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
             {% for item in skipped %}
             <div style="text-align:center; cursor:pointer;"
-                 onclick="openModal('/case-image/{{ case.id }}/{{ item.file }}',
-                          '{{ item.file }} ({{ (item.size_bytes / 1024)|round(1) }} KB)')">
+                 onclick="openModal(
+                     '/case-image/{{ case.id }}/{{ item.file }}',
+                     '{{ item.file }} ({{ (item.size_bytes/1024)|round(1) }} KB)')">
                 <img src="/case-image/{{ case.id }}/{{ item.file }}"
-                     style="width:80px; height:80px; object-fit:cover; border-radius:4px;
-                            border:1px solid #30363d;"
+                     style="width:80px; height:80px; object-fit:cover;
+                            border-radius:4px; border:1px solid #30363d;"
                      onerror="this.style.opacity='0.3'">
                 <p style="font-size:0.65rem; color:#8b949e; margin-top:0.2rem;
-                           width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                           width:80px; overflow:hidden; text-overflow:ellipsis;
+                           white-space:nowrap;">
                     {{ item.file }}
                 </p>
             </div>
@@ -116,20 +162,24 @@
         {% elif query %}matching "{{ query }}"{% endif %}
     </p>
 
-    <!-- ═══ DETAILS VIEW ═══ -->
+    <!-- ══ DETAILS VIEW ════════════════════════════════ -->
     {% if view_mode == 'details' %}
     <div style="display:flex; flex-direction:column; gap:1rem;">
         {% for item in results %}
         <div style="background:#0d1117; border:1px solid #30363d; border-radius:8px;
                     overflow:hidden; display:flex; cursor:pointer;"
-             onclick="openModal('/case-image/{{ case.id }}/{{ item.file }}', '{{ item.file }}')">
+             onclick="openModal(
+                 '/case-image/{{ case.id }}/{{ item.file }}',
+                 '{{ item.file }}')">
 
             <div style="flex-shrink:0; width:200px; height:160px; position:relative;">
                 <img src="/case-image/{{ case.id }}/{{ item.file }}"
                      style="width:200px; height:160px; object-fit:cover; display:block;"
-                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                <div style="display:none; width:200px; height:160px; align-items:center;
-                            justify-content:center; color:#8b949e; font-size:0.75rem;
+                     onerror="this.style.display='none';
+                              this.nextElementSibling.style.display='flex';">
+                <div style="display:none; width:200px; height:160px;
+                            align-items:center; justify-content:center;
+                            color:#8b949e; font-size:0.75rem;
                             background:#161b22;">No preview</div>
                 <div style="position:absolute; bottom:0; left:0; right:0;
                             background:rgba(0,0,0,0.6); padding:4px 8px;
@@ -144,19 +194,25 @@
                     📷 {{ item.file }}
                 </p>
                 <p style="color:#8b949e; font-size:0.75rem; margin-bottom:0.6rem;">
-                    Size: {{ (item.size_bytes / 1024)|round(1) }} KB
+                    Size: {{ (item.size_bytes/1024)|round(1) }} KB
                     &nbsp;|&nbsp; {{ item.detection_count }} detection(s)
                 </p>
                 {% if item.error %}
                     <p style="color:#f85149; font-size:0.8rem;">{{ item.error }}</p>
                 {% elif item.detection_count == 0 %}
-                    <p style="color:#8b949e; font-size:0.8rem;">No objects detected</p>
+                    <p style="color:#8b949e; font-size:0.8rem;">
+                        No objects detected
+                    </p>
                 {% else %}
                     <div style="display:flex; flex-wrap:wrap; gap:0.4rem;">
                         {% for det in item.label_summary %}
-                        <span style="padding:0.2rem 0.6rem; border-radius:12px; font-size:0.75rem;
-                                     {% if det.source == 'weapon' %}background:#da3633; color:#fff;
-                                     {% else %}background:#1f6feb; color:#fff;{% endif %}">
+                        <span style="padding:0.2rem 0.6rem; border-radius:12px;
+                                     font-size:0.75rem;
+                                     {% if det.source == 'weapon' %}
+                                     background:#da3633; color:#fff;
+                                     {% else %}
+                                     background:#1f6feb; color:#fff;
+                                     {% endif %}">
                             {{ det.label }}
                             {% if det.count > 1 %}×{{ det.count }}{% endif %}
                             ({{ det.max_confidence }})
@@ -169,18 +225,25 @@
         {% endfor %}
     </div>
 
-    <!-- ═══ GRID VIEW ═══ -->
+    <!-- ══ GRID VIEW ═══════════════════════════════════ -->
     {% else %}
-    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px,1fr)); gap:1rem;">
+    <div style="display:grid;
+                grid-template-columns:repeat(auto-fill, minmax(260px,1fr));
+                gap:1rem;">
         {% for item in results %}
-        <div style="background:#0d1117; border:1px solid #30363d; border-radius:8px; overflow:hidden;">
+        <div style="background:#0d1117; border:1px solid #30363d;
+                    border-radius:8px; overflow:hidden;">
             <div style="position:relative; cursor:pointer;"
-                 onclick="openModal('/case-image/{{ case.id }}/{{ item.file }}', '{{ item.file }}')">
+                 onclick="openModal(
+                     '/case-image/{{ case.id }}/{{ item.file }}',
+                     '{{ item.file }}')">
                 <img src="/case-image/{{ case.id }}/{{ item.file }}"
                      style="width:100%; height:220px; object-fit:cover; display:block;"
-                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                <div style="display:none; height:220px; align-items:center; justify-content:center;
-                            color:#8b949e; font-size:0.8rem;">Image unavailable</div>
+                     onerror="this.style.display='none';
+                              this.nextElementSibling.style.display='flex';">
+                <div style="display:none; height:220px; align-items:center;
+                            justify-content:center; color:#8b949e;
+                            font-size:0.8rem;">Image unavailable</div>
                 <div style="position:absolute; bottom:0; left:0; right:0;
                             background:rgba(0,0,0,0.65); padding:6px 10px;
                             font-size:0.8rem; color:#fff; text-align:center;">
@@ -189,20 +252,28 @@
             </div>
             <div style="padding:0.8rem;">
                 <p style="color:#58a6ff; font-size:0.78rem; margin-bottom:0.5rem;
-                          white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                          white-space:nowrap; overflow:hidden;
+                          text-overflow:ellipsis;">
                     📷 {{ item.file }}
                 </p>
                 {% if item.error %}
                     <p style="color:#f85149; font-size:0.78rem;">{{ item.error }}</p>
                 {% elif item.detection_count == 0 %}
-                    <p style="color:#8b949e; font-size:0.78rem;">No objects detected</p>
+                    <p style="color:#8b949e; font-size:0.78rem;">
+                        No objects detected
+                    </p>
                 {% else %}
                     <div style="display:flex; flex-wrap:wrap; gap:0.3rem;">
                         {% for det in item.label_summary %}
-                        <span style="padding:0.15rem 0.5rem; border-radius:10px; font-size:0.72rem;
-                                     {% if det.source == 'weapon' %}background:#da3633; color:#fff;
-                                     {% else %}background:#1f6feb; color:#fff;{% endif %}">
-                            {{ det.label }}{% if det.count > 1 %} ×{{ det.count }}{% endif %}
+                        <span style="padding:0.15rem 0.5rem; border-radius:10px;
+                                     font-size:0.72rem;
+                                     {% if det.source == 'weapon' %}
+                                     background:#da3633; color:#fff;
+                                     {% else %}
+                                     background:#1f6feb; color:#fff;
+                                     {% endif %}">
+                            {{ det.label }}
+                            {% if det.count > 1 %} ×{{ det.count }}{% endif %}
                         </span>
                         {% endfor %}
                     </div>
@@ -214,26 +285,34 @@
     {% endif %}
 
     {% elif query or active_tag %}
-    <p style="color:#8b949e;">No images found
+    <p style="color:#8b949e;">
+        No images found
         {% if active_tag %}tagged as "{{ active_tag }}"
         {% else %}matching "{{ query }}"{% endif %}.
     </p>
     {% else %}
-    <p style="color:#8b949e;">No results yet. Run image analysis from the dashboard first.</p>
+    <p style="color:#8b949e;">
+        No results yet. Run image analysis from the dashboard first.
+    </p>
     {% endif %}
+
+    {% endif %}{# end not_yet_analysed #}
 </div>
 
 <!-- Full size modal -->
 <div id="modal" onclick="closeModal()"
      style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.92);
-            z-index:999; align-items:center; justify-content:center; flex-direction:column;
-            padding:1rem;">
+            z-index:999; align-items:center; justify-content:center;
+            flex-direction:column; padding:1rem;">
     <img id="modalImg"
          style="max-width:95vw; max-height:90vh; border-radius:8px;
                 box-shadow:0 0 60px rgba(0,0,0,0.9); object-fit:contain;">
     <p id="modalCaption"
-       style="color:#8b949e; margin-top:0.8rem; font-size:0.85rem; text-align:center;"></p>
-    <p style="color:#444; font-size:0.75rem; margin-top:0.3rem;">Click anywhere to close</p>
+       style="color:#8b949e; margin-top:0.8rem; font-size:0.85rem;
+              text-align:center;"></p>
+    <p style="color:#444; font-size:0.75rem; margin-top:0.3rem;">
+        Click anywhere to close
+    </p>
 </div>
 
 <script>
@@ -245,6 +324,8 @@ function openModal(src, caption) {
 function closeModal() {
     document.getElementById("modal").style.display = "none";
 }
-document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+document.addEventListener("keydown", e => {
+    if (e.key === "Escape") closeModal();
+});
 </script>
 {% endblock %}
