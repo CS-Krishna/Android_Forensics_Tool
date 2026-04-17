@@ -3,7 +3,7 @@ from ultralytics import YOLO
 
 DEFAULT_MODEL = "yolov8n.pt"
 WEAPON_MODEL  = "best.pt"
-MIN_SIZE_BYTES = 5120  # 5KB minimum
+MIN_SIZE_BYTES = 5120  # 5KB
 
 
 def load_models() -> dict:
@@ -18,21 +18,44 @@ def load_models() -> dict:
     return models
 
 
-def run_detection(image_path: str, models: dict, confidence: float = 0.4) -> dict:
+def run_detection(image_path: str, models: dict,
+                  confidence: float = 0.4,
+                  force: bool = False) -> dict:
+    """
+    Runs both models on a single image.
+    force=True bypasses the 5KB size filter.
+    Always returns a dict with size_bytes field.
+    """
     image_path = Path(image_path)
-    if not image_path.exists():
-        return {"error": f"Image not found: {image_path}"}
 
-    too_small = image_path.stat().st_size < MIN_SIZE_BYTES
+    if not image_path.exists():
+        return {
+            "file": image_path.name,
+            "size_bytes": 0,
+            "too_small": False,
+            "detection_count": 0,
+            "label_summary": [],
+            "detections": [],
+            "error": f"Image not found: {image_path}"
+        }
+
+    size = image_path.stat().st_size
+
+    base = {
+        "file": image_path.name,
+        "size_bytes": size,
+        "too_small": size < MIN_SIZE_BYTES,
+        "detection_count": 0,
+        "label_summary": [],
+        "detections": []
+    }
 
     try:
-        # Collect all detections from both models
         raw_detections = []
 
-        general_model = models.get("general")
-        if general_model:
-            results = general_model(str(image_path), conf=confidence, verbose=False)
-            for result in results:
+        general = models.get("general")
+        if general:
+            for result in general(str(image_path), conf=confidence, verbose=False):
                 for box in result.boxes:
                     raw_detections.append({
                         "label": result.names[int(box.cls)],
@@ -41,10 +64,9 @@ def run_detection(image_path: str, models: dict, confidence: float = 0.4) -> dic
                         "source": "general"
                     })
 
-        weapon_model = models.get("weapon")
-        if weapon_model:
-            results = weapon_model(str(image_path), conf=confidence, verbose=False)
-            for result in results:
+        weapon = models.get("weapon")
+        if weapon:
+            for result in weapon(str(image_path), conf=confidence, verbose=False):
                 for box in result.boxes:
                     raw_detections.append({
                         "label": result.names[int(box.cls)],
@@ -53,45 +75,51 @@ def run_detection(image_path: str, models: dict, confidence: float = 0.4) -> dic
                         "source": "weapon"
                     })
 
-        # Group detections by unique labels for display
+        # Group by label
         label_summary = {}
         for det in raw_detections:
             label = det["label"]
             if label not in label_summary:
-                label_summary[label] = {"label": label, "count": 0,
-                                        "max_confidence": 0, "source": det["source"]}
+                label_summary[label] = {
+                    "label": label,
+                    "count": 0,
+                    "max_confidence": 0,
+                    "source": det["source"]
+                }
             label_summary[label]["count"] += 1
             label_summary[label]["max_confidence"] = max(
                 label_summary[label]["max_confidence"], det["confidence"])
 
-        return {
-            "file": image_path.name,
-            "size_bytes": image_path.stat().st_size,
-            "too_small": too_small,
-            "detection_count": len(raw_detections),
-            "label_summary": list(label_summary.values()),
-            "detections": raw_detections
-        }
+        base["detection_count"] = len(raw_detections)
+        base["label_summary"] = list(label_summary.values())
+        base["detections"] = raw_detections
+        return base
 
     except Exception as e:
-        return {"error": str(e)}
+        base["error"] = str(e)
+        return base
 
 
-def scan_folder(folder_path: str, models: dict, confidence: float = 0.4) -> dict:
+def scan_folder(folder_path: str, models: dict,
+                confidence: float = 0.4) -> dict:
     """
     Runs dual detection on all images in folder.
-    Returns dict with analysed results and skipped files list.
+    Returns {"analysed": [...], "skipped": [...]}
     """
     folder = Path(folder_path)
     supported = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
     analysed = []
     skipped = []
 
-    image_files = [f for f in folder.iterdir() if f.suffix.lower() in supported]
+    try:
+        image_files = [f for f in folder.iterdir()
+                       if f.suffix.lower() in supported]
+    except Exception:
+        return {"analysed": [], "skipped": [],
+                "error": "Could not read images folder"}
 
     if not image_files:
-        return {"analysed": [], "skipped": [],
-                "error": "No supported images found in folder"}
+        return {"analysed": [], "skipped": []}
 
     for image_file in image_files:
         size = image_file.stat().st_size
@@ -102,7 +130,6 @@ def scan_folder(folder_path: str, models: dict, confidence: float = 0.4) -> dict
             })
         else:
             result = run_detection(str(image_file), models, confidence)
-            if result:
-                analysed.append(result)
+            analysed.append(result)
 
     return {"analysed": analysed, "skipped": skipped}

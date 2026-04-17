@@ -7,7 +7,7 @@
        class="page-tab {% if active_tab == 'sms' or not active_tab %}active{% endif %}">
         💬 SMS / MMS
     </a>
-    <a href="/sms?tab=timeline&tl_from={{ tl_from }}&tl_to={{ tl_to }}"
+    <a href="/sms?tab=timeline&tl_from_date={{ tl_from_date }}&tl_from_time={{ tl_from_time }}&tl_to_date={{ tl_to_date }}&tl_to_time={{ tl_to_time }}"
        class="page-tab {% if active_tab == 'timeline' %}active{% endif %}">
         📅 Timeline
         {% if timeline %}
@@ -30,32 +30,54 @@
 
     <!-- Filter bar -->
     <form method="GET" action="/sms"
-          style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem;
+          style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1rem;
                  align-items:flex-end;">
         <input type="hidden" name="tab" value="timeline">
+
         <div style="display:flex; flex-direction:column; gap:0.3rem;">
-            <label style="color:#8b949e; font-size:0.75rem;">From date/time</label>
-            <input type="datetime-local" name="tl_from"
-                   value="{{ tl_from }}"
-                   style="width:200px; font-size:0.82rem;">
+            <label style="color:#8b949e; font-size:0.75rem;">From date (optional)</label>
+            <input type="date" name="tl_from_date"
+                   value="{{ tl_from_date }}"
+                   style="width:155px; font-size:0.82rem;">
         </div>
         <div style="display:flex; flex-direction:column; gap:0.3rem;">
-            <label style="color:#8b949e; font-size:0.75rem;">To date/time</label>
-            <input type="datetime-local" name="tl_to"
-                   value="{{ tl_to }}"
-                   style="width:200px; font-size:0.82rem;">
+            <label style="color:#8b949e; font-size:0.75rem;">From time (optional)</label>
+            <input type="time" name="tl_from_time"
+                   value="{{ tl_from_time }}"
+                   style="width:120px; font-size:0.82rem;">
         </div>
+
+        <div style="width:1px; background:#30363d; align-self:stretch; margin:0 0.5rem;">
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:0.3rem;">
+            <label style="color:#8b949e; font-size:0.75rem;">To date (optional)</label>
+            <input type="date" name="tl_to_date"
+                   value="{{ tl_to_date }}"
+                   style="width:155px; font-size:0.82rem;">
+        </div>
+        <div style="display:flex; flex-direction:column; gap:0.3rem;">
+            <label style="color:#8b949e; font-size:0.75rem;">To time (optional)</label>
+            <input type="time" name="tl_to_time"
+                   value="{{ tl_to_time }}"
+                   style="width:120px; font-size:0.82rem;">
+        </div>
+
         <div style="display:flex; gap:0.5rem; align-items:flex-end;">
             <button type="submit" class="btn">Filter</button>
             <a href="/sms?tab=timeline" class="btn btn-secondary">Clear</a>
         </div>
     </form>
 
-    {% if tl_from or tl_to %}
+    {% if tl_from_date or tl_to_date %}
     <p style="color:#e3b341; font-size:0.8rem; margin-bottom:0.8rem;">
-        ⚡ Filtered:
-        {% if tl_from %}from {{ tl_from | replace('T', ' ') }}{% endif %}
-        {% if tl_to %}to {{ tl_to | replace('T', ' ') }}{% endif %}
+        Filtered:
+        {% if tl_from_date %}
+            from {{ tl_from_date }}{% if tl_from_time %} {{ tl_from_time }}{% endif %}
+        {% endif %}
+        {% if tl_to_date %}
+            to {{ tl_to_date }}{% if tl_to_time %} {{ tl_to_time }}{% endif %}
+        {% endif %}
         — {{ timeline|length }} event(s)
     </p>
     {% endif %}
@@ -115,7 +137,7 @@
                     {{ event.to_val }}
                 </td>
                 <td>
-                    <a href="/sms?tab=sms&q=%23{{ event.serial }}&tl_from={{ tl_from }}&tl_to={{ tl_to }}"
+                    <a href="/sms?tab=sms&q=%23{{ event.serial }}&tl_from_date={{ tl_from_date }}&tl_from_time={{ tl_from_time }}&tl_to_date={{ tl_to_date }}&tl_to_time={{ tl_to_time }}"
                        style="color:#c9d1d9; text-decoration:none; font-size:0.82rem;">
                         {{ event.summary }}
                         <span style="color:#58a6ff; font-size:0.72rem; margin-left:0.3rem;">↗</span>
@@ -215,7 +237,7 @@
     <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.8rem;
                 font-size:0.8rem; color:#8b949e;">
         <span>⬅</span>
-        <a href="/sms?tab=timeline&tl_from={{ tl_from }}&tl_to={{ tl_to }}"
+        <a href="/sms?tab=timeline&tl_from_date={{ tl_from_date }}&tl_from_time={{ tl_from_time }}&tl_to_date={{ tl_to_date }}&tl_to_time={{ tl_to_time }}"
            style="color:#58a6ff; text-decoration:none;">
             Back to Timeline
             {% if tl_from or tl_to %}

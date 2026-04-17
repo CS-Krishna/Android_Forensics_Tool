@@ -149,8 +149,15 @@ def ingest():
             return "Case not found", 404
         raw_dir = Path(case["path"]) / "raw"
         for f in raw_dir.rglob("*"):
+            if not f.is_file():
+                continue
             if "hash" in f.name.lower() and f.suffix.lower() == ".pdf":
-                return send_file(str(f), mimetype="application/pdf")
+                return send_file(
+                    str(f.resolve()),
+                    mimetype="application/pdf",
+                    as_attachment=False,
+                    download_name=f.name
+                )
         return "No hash PDF found", 404
 
     # Sort images
@@ -285,37 +292,44 @@ def sms_search():
     query = request.args.get("q", "").strip()
     active_tab = request.args.get("tab", "sms")
     page = int(request.args.get("page", 1))
-    # Timeline filters
-    tl_from = request.args.get("tl_from", "").strip()
-    tl_to = request.args.get("tl_to", "").strip()
+    tl_from_date = request.args.get("tl_from_date", "").strip()
+    tl_from_time = request.args.get("tl_from_time", "").strip()
+    tl_to_date   = request.args.get("tl_to_date", "").strip()
+    tl_to_time   = request.args.get("tl_to_time", "").strip()
     per_page = 50
+
+    # ← THIS must be here before anything else
     all_results = []
 
-    # Build timeline and hashes
+    # Build combined filter strings
+    tl_from = ""
+    tl_to   = ""
+    if tl_from_date:
+        tl_from = tl_from_date + (" " + tl_from_time if tl_from_time else " 00:00")
+    if tl_to_date:
+        tl_to = tl_to_date + (" " + tl_to_time if tl_to_time else " 23:59")
+
+    # Timeline and hashes
     timeline = []
     hashes = []
     if case:
         raw_timeline = build_timeline(data.get("artefacts", {}))
-        # Apply time filters
-        filtered_timeline = raw_timeline
+        filtered = raw_timeline
         if tl_from:
-            filtered_timeline = [e for e in filtered_timeline
-                                  if e["date"] >= tl_from]
+            filtered = [e for e in filtered if e["date"] >= tl_from]
         if tl_to:
-            filtered_timeline = [e for e in filtered_timeline
-                                  if e["date"] <= tl_to]
-        timeline = filtered_timeline
-        raw_dir = case_path(case, "raw")
-        hashes = extract_hash_values(raw_dir)
+            filtered = [e for e in filtered if e["date"] <= tl_to]
+        timeline = filtered
+        hashes = extract_hash_values(case_path(case, "raw"))
 
-    # SMS search — handle #N serial search
+    # SMS search logic
     query_lower = query.lower()
     serial_search = None
     if query.startswith("#") and query[1:].strip().isdigit():
         serial_search = int(query[1:].strip())
 
     sms_keywords = ["sms", "message", "mms", "chat", "whatsapp"]
-    record_counter = {}  # track serial per artefact
+    record_counter = {}
 
     for name, content in data.get("artefacts", {}).items():
         if any(kw in name.lower() for kw in sms_keywords):
@@ -324,31 +338,24 @@ def sms_search():
             for record in content.get("records", []):
                 record_counter[name] += 1
                 serial = record_counter[name]
-
                 clean_record = {k: v for k, v in record.items()
                                 if k.strip() not in ("#", "Unnamed: 0")}
-                
+
                 if serial_search is not None:
                     if serial == serial_search:
-                        all_results.append({
-                            "artefact": name,
-                            "serial": serial,
-                            "record": clean_record
-                        })
+                        all_results.append({"artefact": name,
+                                            "serial": serial,
+                                            "record": clean_record})
                 elif query_lower:
                     if any(query_lower in str(v).lower()
-                        for v in record.values()):
-                        all_results.append({
-                            "artefact": name,
-                            "serial": serial,
-                            "record": clean_record
-                        })
+                           for v in record.values()):
+                        all_results.append({"artefact": name,
+                                            "serial": serial,
+                                            "record": clean_record})
                 else:
-                    all_results.append({
-                        "artefact": name,
-                        "serial": serial,
-                        "record": clean_record
-                    })
+                    all_results.append({"artefact": name,
+                                        "serial": serial,
+                                        "record": clean_record})
 
     total = len(all_results)
     total_pages = max(1, (total + per_page - 1) // per_page)
@@ -363,8 +370,11 @@ def sms_search():
                            start=start, end=end,
                            active_tab=active_tab,
                            timeline=timeline,
-                           tl_from=tl_from,
-                           tl_to=tl_to,
+                           tl_from=tl_from, tl_to=tl_to,
+                           tl_from_date=tl_from_date,
+                           tl_from_time=tl_from_time,
+                           tl_to_date=tl_to_date,
+                           tl_to_time=tl_to_time,
                            hashes=hashes)
 
 

@@ -19,7 +19,8 @@
             {% endif %}
         </p>
         {% if pending_images > 0 %}
-        <form method="POST" action="/run_yolo" style="display:inline;">
+        <form method="POST" action="/run_yolo" style="display:inline;"
+              onsubmit="document.getElementById('progressOverlay').classList.add('active')">
             <button type="submit" class="btn"
                     style="font-size:0.95rem; padding:0.6rem 1.5rem;">
                 ▶ Run Image Analysis Now

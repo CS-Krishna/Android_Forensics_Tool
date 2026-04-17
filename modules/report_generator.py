@@ -113,11 +113,13 @@ def extract_hash_values(raw_dir) -> list:
 
 
 def build_timeline(artefacts: dict) -> list:
-    date_keywords   = ["date", "time", "timestamp", "datetime", "created", "sent", "received"]
-    direction_kw    = ["direction", "folder"]
-    from_kw         = ["from", "sender"]
-    to_kw           = ["to", "recipient"]
-    skip_kw         = ["unnamed", "index"]   # removed "#" — handled separately below
+    date_keywords  = ["date", "time", "timestamp", "datetime", "created",
+                      "sent", "received"]
+    direction_kw   = ["direction", "folder", "type"]
+    # Exact matches only for from/to to avoid false matches
+    from_exact     = {"from", "sender", "from address", "from number"}
+    to_exact       = {"to", "recipient", "to address", "to number"}
+    skip_kw        = ["unnamed", "index"]
 
     events = []
 
@@ -133,13 +135,12 @@ def build_timeline(artefacts: dict) -> list:
 
             for k, v in record.items():
                 kl = k.lower().strip()
-                vs = str(v).strip() if v and str(v).strip() not in ("", "nan", "None") else ""
+                vs = str(v).strip() if v and str(v).strip() \
+                    not in ("", "nan", "None") else ""
                 if not vs:
                     continue
-                # Skip purely unnamed/index columns
                 if any(sk in kl for sk in skip_kw):
                     continue
-                # Skip bare # column (serial index from xlsx)
                 if kl == "#":
                     continue
 
@@ -148,30 +149,32 @@ def build_timeline(artefacts: dict) -> list:
                     date_key = k
                     continue
 
-                # Exact or prefix match for direction
-                if not direction_val and any(kl == kw or kl.startswith(kw) for kw in direction_kw):
+                if not direction_val and any(kl == kw for kw in direction_kw):
                     direction_val = vs
                     continue
 
-                # From — exact match first, then prefix
-                if not from_val and any(kl == kw or kl.startswith(kw) for kw in from_kw):
+                # Exact match for From/To
+                if not from_val and kl in from_exact:
                     from_val = vs[:80]
                     continue
 
-                # To — exact match first
-                if not to_val and any(kl == kw or kl.startswith(kw) for kw in to_kw):
+                if not to_val and kl in to_exact:
                     to_val = vs[:80]
                     continue
 
             # Summary — first remaining meaningful field
+            used_keys = {date_key, "#"}
             for k, v in record.items():
                 kl = k.lower().strip()
-                vs = str(v).strip() if v and str(v).strip() not in ("", "nan", "None") else ""
-                if not vs or k == date_key or kl == "#":
+                vs = str(v).strip() if v and str(v).strip() \
+                    not in ("", "nan", "None") else ""
+                if not vs or k in used_keys or kl == "#":
                     continue
                 if any(sk in kl for sk in skip_kw):
                     continue
-                if any(kw in kl for kw in date_keywords + direction_kw + from_kw + to_kw):
+                if any(kw in kl for kw in date_keywords):
+                    continue
+                if any(kl == kw for kw in direction_kw | from_exact | to_exact):
                     continue
                 summary = vs[:120]
                 break
