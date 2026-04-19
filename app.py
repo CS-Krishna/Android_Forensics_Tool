@@ -16,7 +16,15 @@ from modules.sorter import extract_input, sort_files
 from modules.report_generator import generate_report
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024 * 1024  # 10 GB
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024 * 1024  # 50 GB
+app.config['MAX_FORM_PARTS'] = 1000
+app.config['MAX_FORM_MEMORY_SIZE'] = 50 * 1024 * 1024 * 1024
+
+from werkzeug.exceptions import RequestEntityTooLarge
+
+@app.errorhandler(RequestEntityTooLarge)
+def handle_large_file(e):
+    return jsonify({"error": "File too large for direct upload. Please use the path field instead — type the full path to your file (e.g. C:\\Users\\Test\\Downloads\\Android.zip) and click Ingest & Parse."}), 413
 
 ALEAPP_PATH = "ALEAPP/aleapp.py"
 init_cases_dir()
@@ -108,39 +116,79 @@ def ingest():
     imgs_dir = case_path(case, "images")
     rpts_dir = case_path(case, "reports")
 
-    # Handle uploaded file vs manually typed path
-    uploaded_file = request.files.get("file")
-    if uploaded_file and uploaded_file.filename:
-        tmp = Path(tempfile.mkdtemp()) / uploaded_file.filename
-        uploaded_file.save(str(tmp))
-        input_path = str(tmp)
-    else:
-        input_path = request.form.get("input_path", "").strip()
-        if not input_path or not Path(input_path).exists():
-            return jsonify({"error": "Invalid input path. Enter a valid path or use Browse."}), 400
-
-    # Extract
-    result = extract_input(input_path, str(raw_dir))
-    if isinstance(result, dict) and "error" in result:
-        return jsonify(result), 400
-
-    # Compute and store SHA256 of the original evidence file
-    import hashlib
     try:
-        h = hashlib.sha256()
-        evidence_path = Path(input_path)
-        with open(evidence_path, "rb") as fh:
-            for chunk in iter(lambda: fh.read(65536), b""):
-                h.update(chunk)
-        evidence_hash = h.hexdigest()
-        # Store in case registry
-        registry = load_registry()
-        if case["id"] in registry["cases"]:
-            registry["cases"][case["id"]]["evidence_hash"] = evidence_hash
-            registry["cases"][case["id"]]["evidence_file"] = evidence_path.name
-            save_registry(registry)
-    except Exception:
-        evidence_hash = "unavailable"
+        # Handle uploaded file vs manually typed path
+        uploaded_file = request.files.get("file")
+        input_path = None
+
+        if uploaded_file and uploaded_file.filename:
+            tmp_dir = Path(tempfile.mkdtemp())
+            tmp_path = tmp_dir / uploaded_file.filename
+            uploaded_file.save(str(tmp_path))
+            input_path = str(tmp_path)
+        else:
+            typed_path = request.form.get("input_path", "").strip()
+            if not typed_path or not Path(typed_path).exists():
+                return jsonify({"error": "Invalid input path. Enter a valid path or use Browse."}), 400
+            input_path = typed_path
+
+        # ── Pre-flight format check — fast, no extraction ──
+        from modules.sorter import detect_proprietary_formats
+        format_issues = detect_proprietary_formats(input_path)
+        if format_issues:
+            return jsonify({
+                "error": "proprietary_format",
+                "message": "Proprietary forensic format(s) detected.",
+                "formats": format_issues
+            }), 415
+
+        # Compute SHA256 of evidence file
+        import hashlib
+        try:
+            h = hashlib.sha256()
+            with open(input_path, "rb") as fh:
+                for chunk in iter(lambda: fh.read(65536), b""):
+                    h.update(chunk)
+            evidence_hash = h.hexdigest()
+            evidence_name = Path(input_path).name
+            registry = load_registry()
+            if case["id"] in registry["cases"]:
+                registry["cases"][case["id"]]["evidence_hash"] = evidence_hash
+                registry["cases"][case["id"]]["evidence_file"] = evidence_name
+                save_registry(registry)
+        except Exception as hash_err:
+            print(f"[Ingest] Hash computation skipped: {hash_err}")
+
+        # Extract
+        result = extract_input(input_path, str(raw_dir))
+        if isinstance(result, dict) and "error" in result:
+            return jsonify(result), 400
+
+        # Sort images
+        sort_summary = sort_files(str(raw_dir), str(imgs_dir))
+
+        # Run ALEAPP
+        cmd = ["python", ALEAPP_PATH, "-t", "fs",
+               "-i", str(raw_dir), "-o", str(rpts_dir)]
+        try:
+            subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        except subprocess.TimeoutExpired:
+            return jsonify({"error": "ALEAPP timed out"}), 500
+
+        # Normalise
+        norm = normalise_with_xlsx(str(rpts_dir), str(raw_dir), case["name"])
+        save_normalised(norm, str(case_path(case, "normalised.json")))
+
+        return jsonify({
+            "status": "success",
+            "images_sorted": sort_summary["images_sorted"],
+            "artefacts_parsed": norm["artefact_count"]
+        })
+
+    except Exception as e:
+        import traceback
+        print(f"[Ingest] Error: {traceback.format_exc()}")
+        return jsonify({"error": str(e)}), 500
 
     @app.route("/case-hash-pdf/<case_id>")
     def serve_hash_pdf(case_id):

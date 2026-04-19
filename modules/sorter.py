@@ -9,6 +9,127 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".gif", ".tiff"}
 
 INVALID_CHARS = re.compile(r'[\x00-\x1f\x7f<>:"/\\|?*]')
 
+PROPRIETARY_FORMATS = {
+    ".xry": {
+        "tool": "XAMN / XACT (MSAB)",
+        "instruction": "Open the .xrycase file in XAMN or XACT, go to File → Export → Logical Export, export as a folder or ZIP, then re-ingest the exported folder."
+    },
+    ".xrycase": {
+        "tool": "XAMN / XACT (MSAB)",
+        "instruction": "Open this .xrycase file in XAMN or XACT, go to File → Export → Logical Export, export as a folder or ZIP, then re-ingest the exported folder."
+    },
+    ".e01": {
+        "tool": "FTK Imager or Autopsy",
+        "instruction": "Open the .e01 image in FTK Imager, go to File → Export Logical Image, export as a folder or ZIP, then re-ingest the exported folder."
+    },
+    ".ex01": {
+        "tool": "FTK Imager or Autopsy",
+        "instruction": "Open the .ex01 image in FTK Imager, go to File → Export Logical Image, export as a folder or ZIP, then re-ingest the exported folder."
+    },
+    ".aff": {
+        "tool": "Autopsy or Guymager",
+        "instruction": "Open the .aff image in Autopsy, export the filesystem as a logical folder, then re-ingest that folder."
+    },
+    ".aff4": {
+        "tool": "Autopsy or AFC4 tools",
+        "instruction": "Open the .aff4 image in Autopsy, export the filesystem as a logical folder, then re-ingest that folder."
+    },
+    ".dd": {
+        "tool": "FTK Imager or Autopsy",
+        "instruction": "Open the .dd raw image in FTK Imager or Autopsy, export the filesystem as a logical folder, then re-ingest that folder."
+    },
+    ".img": {
+        "tool": "FTK Imager or Autopsy",
+        "instruction": "Open the .img raw image in FTK Imager or Autopsy, export the filesystem as a logical folder, then re-ingest that folder."
+    },
+    ".bin": {
+        "tool": "FTK Imager or XACT",
+        "instruction": "This appears to be a raw binary image. Open it in FTK Imager or the originating acquisition tool, export the filesystem as a logical folder, then re-ingest that folder."
+    },
+    ".cellebrite": {
+        "tool": "Cellebrite UFED Physical Analyzer",
+        "instruction": "Open this file in Cellebrite UFED Physical Analyzer, export as a logical folder or ZIP, then re-ingest the exported folder."
+    },
+    ".ufd": {
+        "tool": "Cellebrite UFED Physical Analyzer",
+        "instruction": "Open this .ufd file in Cellebrite UFED Physical Analyzer, go to Export → File System Export, then re-ingest the exported folder."
+    },
+    ".ofb": {
+        "tool": "Oxygen Forensic Detective",
+        "instruction": "Open this .ofb file in Oxygen Forensic Detective, go to File → Export → Export to Folder, then re-ingest the exported folder."
+    },
+    ".oxs": {
+        "tool": "Oxygen Forensic Detective",
+        "instruction": "Open this .oxs file in Oxygen Forensic Detective, go to File → Export → Export to Folder, then re-ingest the exported folder."
+    },
+}
+
+
+def detect_proprietary_formats(input_path: str) -> list:
+    """
+    Fast pre-flight check for proprietary forensic formats.
+    Checks the input file itself first, then scans archive contents
+    using header/index only — never extracts anything.
+    Returns a list of detected format issues.
+    """
+    input_path = Path(input_path)
+    detected = []
+    seen_suffixes = set()
+
+    def add_detection(filename, suffix):
+        if suffix not in seen_suffixes:
+            seen_suffixes.add(suffix)
+            detected.append({
+                "file": filename,
+                "suffix": suffix,
+                **PROPRIETARY_FORMATS[suffix]
+            })
+
+    # Check the input file itself first — instant
+    suffix = input_path.suffix.lower()
+    if suffix in PROPRIETARY_FORMATS:
+        add_detection(input_path.name, suffix)
+        return detected  # No need to look inside
+
+    # For zip — read central directory only (no extraction, very fast even for large files)
+    if suffix == ".zip":
+        try:
+            import zipfile
+            with zipfile.ZipFile(input_path, "r") as z:
+                # namelist() only reads the central directory header — not the file data
+                for name in z.namelist():
+                    ext = Path(name).suffix.lower()
+                    if ext in PROPRIETARY_FORMATS:
+                        add_detection(name, ext)
+        except Exception:
+            pass
+
+    # For tar/gz — read member list only (no extraction)
+    elif suffix in {".tar", ".gz", ".tgz"} or str(input_path).endswith(".tar.gz"):
+        try:
+            import tarfile
+            with tarfile.open(input_path, "r:*") as t:
+                # getmembers() reads the tar index — not the file data
+                for member in t.getmembers():
+                    ext = Path(member.name).suffix.lower()
+                    if ext in PROPRIETARY_FORMATS:
+                        add_detection(member.name, ext)
+        except Exception:
+            pass
+
+    # For folder — scan filenames only, no reading
+    elif input_path.is_dir():
+        try:
+            for f in input_path.rglob("*"):
+                if f.is_file():
+                    ext = f.suffix.lower()
+                    if ext in PROPRIETARY_FORMATS:
+                        add_detection(f.name, ext)
+        except Exception:
+            pass
+
+    return detected
+
 
 def sanitise_path(name: str) -> str:
     """Strips carriage returns and invalid Windows filename characters."""

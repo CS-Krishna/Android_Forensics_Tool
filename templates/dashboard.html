@@ -144,8 +144,7 @@
         Runs weapon + general object detection on all images in the active case.
     </p>
     <form id="yoloForm">
-        <button type="button" class="btn"
-                onclick="postAction('/run_yolo','yoloForm','yoloStatus')">
+        <button type="button" class="btn" onclick="runYolo()">
             ▶ Run Image Analysis
         </button>
     </form>
@@ -197,17 +196,27 @@ function handleFilePick(input) {
 // ── Ingest with file upload support ──────────────────────
 async function runIngest() {
     const status = document.getElementById('ingestStatus');
+    const pathField = document.getElementById('inputPathField');
+    const filePicker = document.getElementById('filePicker');
+
+    // Show progress overlay
+    document.getElementById('progressTitle').textContent = '📦 Ingesting Evidence';
+    document.getElementById('progressMsg').textContent =
+        'Extracting evidence and running ALEAPP...';
+    document.getElementById('progressOverlay').classList.add('active');
+
     status.className = 'status';
     status.textContent = 'Ingesting — this may take several minutes for large files...';
     status.style.display = 'block';
 
     const formData = new FormData();
 
-    if (pickedFile) {
-        formData.append('file', pickedFile);
+    if (filePicker.files.length > 0) {
+        formData.append('file', filePicker.files[0]);
     } else {
-        const path = document.getElementById('inputPathField').value.trim();
+        const path = pathField.value.trim();
         if (!path) {
+            document.getElementById('progressOverlay').classList.remove('active');
             status.className = 'status error';
             status.textContent = 'Please enter a path or use Browse to select a file.';
             return;
@@ -217,41 +226,80 @@ async function runIngest() {
 
     try {
         const res = await fetch('/ingest', { method: 'POST', body: formData });
+        document.getElementById('progressOverlay').classList.remove('active');
         const json = await res.json();
-        if (json.error) {
+       if (json.error) {
             status.className = 'status error';
-            status.textContent = 'Error: ' + json.error;
+            if (json.error === 'proprietary_format' && json.formats) {
+                let msg = '<strong>⚠️ Proprietary format detected — cannot parse directly.</strong><br><br>';
+                json.formats.forEach(f => {
+                    msg += `<strong>${f.file}</strong> — requires <em>${f.tool}</em><br>`;
+                    msg += `<span style="opacity:0.8;">→ ${f.instruction}</span><br><br>`;
+                });
+                msg += '<span style="opacity:0.6;">DroidTrace supports logical filesystem exports (folder, ZIP, TAR). ';
+                msg += 'Export from the originating tool first, then re-ingest.</span>';
+                status.innerHTML = msg;
+            } else {
+                status.textContent = 'Error: ' + json.error;
+            }
         } else {
             status.className = 'status success';
             status.textContent = '✓ Ingested successfully — '
                 + json.images_sorted + ' images sorted, '
                 + json.artefacts_parsed + ' artefacts parsed.';
-            pickedFile = null;
+            filePicker.value = '';
+            pathField.value = '';
         }
     } catch(e) {
+        document.getElementById('progressOverlay').classList.remove('active');
         status.className = 'status error';
         status.textContent = 'Request failed: ' + e;
     }
 }
 
-// ── Generic postAction for YOLOv8 button ─────────────────
+// ──  Run YOLO function ─────────────────
+function runYolo() {
+    document.getElementById('progressTitle').textContent = '🔍 Running Image Analysis';
+    document.getElementById('progressMsg').textContent =
+        'Loading models and scanning images...';
+    document.getElementById('progressOverlay').classList.add('active');
+
+    const status = document.getElementById('yoloStatus');
+
+    fetch('/run_yolo', { method: 'POST', body: new FormData(), redirect: 'follow' })
+        .then(res => {
+            document.getElementById('progressOverlay').classList.remove('active');
+            if (res.redirected || (res.url && res.url.includes('/images'))) {
+                window.location.href = res.url;
+                return;
+            }
+            return res.json().then(json => {
+                if (json.error) {
+                    status.className = 'status error';
+                    status.textContent = 'Error: ' + json.error;
+                } else {
+                    status.className = 'status success';
+                    status.textContent = '✓ ' + json.images_analysed +
+                        ' images analysed, ' + json.images_skipped + ' skipped.';
+                }
+                status.style.display = 'block';
+            });
+        })
+        .catch(e => {
+            document.getElementById('progressOverlay').classList.remove('active');
+            status.className = 'status error';
+            status.textContent = 'Request failed: ' + e;
+            status.style.display = 'block';
+        });
+}
+
 async function postAction(url, formId, statusId) {
     const status = document.getElementById(statusId);
     status.className = 'status';
     status.textContent = 'Running...';
     status.style.display = 'block';
     try {
-        const res = await fetch(url, {
-            method: 'POST',
-            body: new FormData(),
-            redirect: 'follow'
-        });
-        // If redirected to images page, just report success
-        if (res.url && res.url.includes('/images')) {
-            status.className = 'status success';
-            status.textContent = '✓ Analysis complete. View results on the Image Analysis page.';
-            return;
-        }
+        const res = await fetch(url, { method: 'POST', body: new FormData() });
         const json = await res.json();
         if (json.error) {
             status.className = 'status error';

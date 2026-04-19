@@ -113,13 +113,13 @@ def extract_hash_values(raw_dir) -> list:
 
 
 def build_timeline(artefacts: dict) -> list:
-    date_keywords  = ["date", "time", "timestamp", "datetime", "created",
-                      "sent", "received"]
-    direction_kw   = ["direction", "folder", "type"]
+    date_keywords  = {"date", "time", "timestamp", "datetime", "created",
+                      "sent", "received"}
+    direction_kw   = {"direction", "folder", "type"}
     # Exact matches only for from/to to avoid false matches
     from_exact     = {"from", "sender", "from address", "from number"}
     to_exact       = {"to", "recipient", "to address", "to number"}
-    skip_kw        = ["unnamed", "index"]
+    skip_kw        = {"unnamed", "index"}
 
     events = []
 

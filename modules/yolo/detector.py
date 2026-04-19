@@ -1,7 +1,7 @@
 from pathlib import Path
 from ultralytics import YOLO
 
-DEFAULT_MODEL = "yolov8n.pt"
+DEFAULT_MODEL = "yolo11m.pt"
 WEAPON_MODEL  = "best.pt"
 MIN_SIZE_BYTES = 5120  # 5KB
 
@@ -66,7 +66,7 @@ def run_detection(image_path: str, models: dict,
 
         weapon = models.get("weapon")
         if weapon:
-            for result in weapon(str(image_path), conf=confidence, verbose=False):
+            for result in weapon(str(image_path), conf=0.85, verbose=False):
                 for box in result.boxes:
                     raw_detections.append({
                         "label": result.names[int(box.cls)],
